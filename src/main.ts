@@ -24,11 +24,16 @@ const router = new Router();
 registerApi(router);
 registerPages(router, providers);
 
-const port = Number(process.env.VR_PORT ?? 8080);
+const port = Number(process.env.VR_PORT ?? 8080); // VR_PORT=0 -> ephemeral, announced below
+const host = process.env.VR_HOST; // e.g. 127.0.0.1 to bind loopback only
 const server = createApp(db, router);
-server.listen(port, () => {
-  console.log(`vendor-refresh api+web listening on http://localhost:${port}`);
-});
+const announce = () => {
+  const a = server.address();
+  const shown = a && typeof a === "object" ? `${a.address}:${a.port}` : `${host ?? "localhost"}:${port}`;
+  console.log(`vendor-refresh api+web listening on http://${shown}`);
+};
+if (host) server.listen(port, host, announce);
+else server.listen(port, announce);
 
 const worker = startWorker(db, providers, { intervalMs: Number(process.env.VR_WORKER_MS ?? 250) });
 console.log(`worker started (rail=${providers.railName})`);

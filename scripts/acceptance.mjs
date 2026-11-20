@@ -11,8 +11,7 @@ import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
-const PORT = 8791;
-const BASE = `http://localhost:${PORT}`;
+let BASE = null; // set from the child's own listening announcement
 const dir = mkdtempSync(join(process.cwd(), ".acceptance-"));
 const DB = join(dir, "acc.db");
 const FIXTURE = join(dir, "fixture.json");
@@ -51,13 +50,36 @@ writeFileSync(FIXTURE, JSON.stringify([
 const env = {
   ...process.env,
   VR_DB: DB,
-  VR_PORT: String(PORT),
+  VR_PORT: "0", // ephemeral port — the child announces its real bound address
+  VR_HOST: "127.0.0.1", // loopback only; cannot collide with another workspace's server
   VR_WORKER_MS: "50",
   VR_FIXTURE_DATA: FIXTURE,
   VR_STALE_AFTER: "1", // evidence older than 1s is stale -> scans flag quickly
 };
-const server = spawn("node", ["src/main.ts"], { env, stdio: ["ignore", "pipe", "pipe"] });
-server.stderr.on("data", (d) => process.stderr.write(d));
+const children = [];
+/**
+ * Spawn the app and resolve once ITS OWN stdout prints the bound address —
+ * never poll a guessed port, which can answer from an unrelated server.
+ */
+function startServer() {
+  const proc = spawn("node", ["src/main.ts"], { env, stdio: ["ignore", "pipe", "pipe"] });
+  children.push(proc);
+  proc.stderr.on("data", (d) => process.stderr.write(d));
+  return new Promise((resolve, reject) => {
+    let buf = "";
+    const timer = setTimeout(() => reject(new Error("server did not announce a bound port in 15s")), 15000);
+    proc.on("exit", (code) => reject(new Error(`server exited early (${code}): ${buf.slice(-400)}`)));
+    proc.stdout.on("data", (d) => {
+      buf += d;
+      const m = buf.match(/listening on (http:\/\/\S+)/);
+      if (m) {
+        clearTimeout(timer);
+        BASE = m[1].replace(/\/$/, "");
+        resolve(proc);
+      }
+    });
+  });
+}
 const evidence = { steps: [] };
 function step(name, data) {
   evidence.steps.push({ name, ...data });
@@ -65,19 +87,18 @@ function step(name, data) {
 }
 function fail(msg) {
   console.error("✘ " + msg);
-  server.kill("SIGTERM");
+  for (const p of children) p.kill("SIGTERM");
   rmSync(dir, { recursive: true, force: true });
   process.exit(1);
 }
 async function waitReady() {
-  for (let i = 0; i < 100; i++) {
-    try {
-      const r = await fetch(BASE + "/login");
-      if (r.ok) return;
-    } catch {}
-    await new Promise((r) => setTimeout(r, 100));
+  try {
+    await startServer();
+    const r = await fetch(BASE + "/login");
+    if (!r.ok) fail(`own server answered ${r.status} at ${BASE}`);
+  } catch (e) {
+    fail(e.message);
   }
-  fail("server did not start");
 }
 async function call(token, method, path, body) {
   const r = await fetch(BASE + path, {
@@ -145,10 +166,8 @@ if (fields.address !== "changed" || fields.status !== "unknown") fail(`unexpecte
 step("one address change + one unknown status", fields);
 
 // 5. Restart mid-flow (NFR-01 replay), then accept -> version +1 exactly once.
-server.kill("SIGTERM");
+children[0].kill("SIGTERM");
 await new Promise((r) => setTimeout(r, 400));
-const server2 = spawn("node", ["src/main.ts"], { env, stdio: ["ignore", "pipe", "pipe"] });
-server2.stderr.on("data", (d) => process.stderr.write(d));
 await waitReady();
 const dec = await call(carol, "POST", `/v1/refreshes/${refreshId}/decision`, {
   expected_version: 1, decision: "accept", reason: "registry address verified",
@@ -180,6 +199,6 @@ step("export + reconciliation + pilot report", {
 
 console.log("\nACCEPTANCE EVIDENCE");
 console.log(JSON.stringify(evidence, null, 2));
-server2.kill("SIGTERM");
+for (const p of children) p.kill("SIGTERM");
 console.log(`artifacts kept at ${dir} (db + fixture)`);
 process.exit(0);
