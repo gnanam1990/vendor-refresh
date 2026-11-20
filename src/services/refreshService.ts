@@ -84,7 +84,7 @@ export function createRefresh(
        VALUES (?,?,?,?,?,?, 'queued', ?,?,?,?,?)`
     ).run(id, actor.tenantId, supplierId, input.expectedVersion, triggerKey, policy.version, input.reason, actor.id, key, ts, ts);
     db.prepare(
-      "INSERT INTO outbox (id, tenant_id, kind, payload, state, next_at, created_at, updated_at) VALUES (?,?,?, 'pending', ?, ?, ?)"
+      "INSERT INTO outbox (id, tenant_id, kind, payload, state, next_at, created_at, updated_at) VALUES (?,?,?,?, 'pending', ?, ?, ?)"
     ).run(newId("out"), actor.tenantId, "refresh.process", JSON.stringify({ refreshId: id }), ts, ts, ts);
     if (triggerId) {
       db.prepare("UPDATE triggers SET state = 'consumed', refresh_id = ? WHERE id = ?").run(id, triggerId);

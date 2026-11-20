@@ -78,6 +78,17 @@ export async function api(
 
 export { makeSiren };
 
+export async function drainAll(env: TestEnv, rounds = 10): Promise<number> {
+  const { drain } = await import("../src/worker.ts");
+  let total = 0;
+  for (let i = 0; i < rounds; i++) {
+    const n = await drain(env.db, env.providers);
+    total += n;
+    if (n === 0) break;
+  }
+  return total;
+}
+
 export const VENDOR_CSV_HEADERS = "siren,legal_name,vendor_ref,address_line1,postal_code,city,country,status";
 
 export function vendorCsv(siren: string, name = "ACME FRANCE SAS"): string {

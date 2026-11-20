@@ -3,6 +3,7 @@ import { sendJson } from "./server.ts";
 import { createSession, requireRole, assertCanWrite } from "../auth.ts";
 import { runImport, preview, allowedFields, type ImportKind } from "../services/importService.ts";
 import { scanFreshness, openCaseList } from "../services/scan.ts";
+import { createRefresh } from "../services/refreshService.ts";
 import { badRequest, notFound } from "../domain/errors.ts";
 import { newId } from "../db.ts";
 
@@ -100,6 +101,68 @@ export function registerApi(r: Router): void {
   r.get("/v1/inbox", (ctx: Ctx) => {
     const kind = ctx.query.get("kind") ?? undefined;
     sendJson(ctx.res, 200, { cases: openCaseList(ctx.db, ctx.actor!.tenantId, kind) });
+  });
+
+  r.post("/v1/suppliers/:id/refreshes", (ctx: Ctx) => {
+    requireRole(ctx.actor!, "request_refresh");
+    const b = (ctx.body ?? {}) as Record<string, unknown>;
+    const out = createRefresh(ctx.db, ctx.actor!, ctx.params.id, {
+      reason: String(b.reason ?? ""),
+      expectedVersion: Number(b.expected_version),
+      key: b.key != null ? String(b.key) : null!,
+      triggerId: b.trigger_id != null ? String(b.trigger_id) : undefined,
+    });
+    sendJson(ctx.res, out.deduplicated ? 200 : 201, out);
+  });
+
+  r.get("/v1/refreshes/:id", (ctx: Ctx) => {
+    const refresh = ctx.db
+      .prepare("SELECT * FROM refreshes WHERE id = ? AND tenant_id = ?")
+      .get(ctx.params.id, ctx.actor!.tenantId) as Record<string, unknown> | undefined;
+    if (!refresh) throw notFound("refresh not found");
+    const diffs = ctx.db.prepare("SELECT * FROM diffs WHERE refresh_id = ? ORDER BY field").all(refresh.id) as Record<string, unknown>[];
+    const intents = ctx.db.prepare("SELECT * FROM spend_intents WHERE refresh_id = ?").all(refresh.id);
+    const quote = refresh.quote_id ? ctx.db.prepare("SELECT * FROM quotes WHERE id = ?").get(refresh.quote_id) : null;
+    const snapshot = refresh.snapshot_id
+      ? (ctx.db.prepare("SELECT id, source, retrieved_at, source_effective_at, terms, quarantined, quarantine_reason FROM snapshots WHERE id = ?").get(refresh.snapshot_id) as Record<string, unknown>)
+      : null;
+    sendJson(ctx.res, 200, {
+      refresh,
+      quote: quote ? { ...quote, metadata: JSON.parse(String((quote as any).metadata)) } : null,
+      spendIntents: intents,
+      diffs: diffs.map((d) => ({
+        ...d,
+        accepted_value: d.accepted_value ? JSON.parse(String(d.accepted_value)) : null,
+        observed_value: d.observed_value ? JSON.parse(String(d.observed_value)) : null,
+      })),
+      snapshot: snapshot ? { ...snapshot, terms: JSON.parse(String(snapshot.terms)) } : null,
+    });
+  });
+
+  r.get("/v1/refreshes/:id/evidence", (ctx: Ctx) => {
+    const refresh = ctx.db
+      .prepare("SELECT snapshot_id FROM refreshes WHERE id = ? AND tenant_id = ?")
+      .get(ctx.params.id, ctx.actor!.tenantId) as Record<string, unknown> | undefined;
+    if (!refresh || !refresh.snapshot_id) throw notFound("no evidence for this refresh");
+    const snap = ctx.db
+      .prepare("SELECT * FROM snapshots WHERE id = ? AND tenant_id = ?")
+      .get(refresh.snapshot_id, ctx.actor!.tenantId) as Record<string, unknown> | undefined;
+    if (!snap) throw notFound("snapshot not found");
+    // Redacted evidence preview: structure + field retention, payload summarized.
+    const payload = JSON.parse(String(snap.payload)) as Record<string, unknown>;
+    sendJson(ctx.res, 200, {
+      snapshot: {
+        id: snap.id,
+        source: snap.source,
+        snapshotHash: snap.snapshot_hash,
+        retrievedAt: snap.retrieved_at,
+        sourceEffectiveAt: snap.source_effective_at,
+        quarantined: !!snap.quarantined,
+        quarantineReason: snap.quarantine_reason,
+        terms: JSON.parse(String(snap.terms)),
+        payloadFields: Object.keys(payload),
+      },
+    });
   });
 
   r.get("/v1/invoices", (ctx: Ctx) => {

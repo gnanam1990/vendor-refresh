@@ -1,7 +1,7 @@
 {
   "project": "Vendor Refresh",
   "packVersion": "1.0",
-  "testedSha": "56cd415fc859591375530e39e420f5b925a41419",
+  "testedSha": "2c513ce717490e2e1c530bb4898f56042682f8a7",
   "targetBranch": "devin/vendor-refresh",
   "modules": [
     {
@@ -33,16 +33,20 @@
     {
       "id": "M03",
       "title": "Registry adapter and terms",
-      "state": "active",
-      "owner": null,
-      "commands": [],
-      "evidence": [],
+      "state": "accepted",
+      "owner": "devin-local",
+      "commands": [
+        "npm test (12 pass incl. T-005,T-006)"
+      ],
+      "evidence": [
+        "test/m03-registry.test.ts"
+      ],
       "nextAction": "Define provider discovery, quoted amount, metadata, source timing and lawful field retention. Implement a real eligible source and record environment evidence."
     },
     {
       "id": "M04",
       "title": "Delegated spending and recovery",
-      "state": "pending",
+      "state": "active",
       "owner": null,
       "commands": [],
       "evidence": [],

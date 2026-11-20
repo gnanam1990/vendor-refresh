@@ -101,7 +101,7 @@ export async function processRefresh(db: DB, providers: ProviderSet, refreshId: 
     );
     db.prepare("UPDATE refreshes SET state = 'reserved', quote_id = ?, updated_at = ? WHERE id = ?").run(quoteId, ts, refreshId);
     db.prepare(
-      "INSERT INTO outbox (id, tenant_id, kind, payload, state, next_at, created_at, updated_at) VALUES (?,?,?, 'pending', ?, ?, ?)"
+      "INSERT INTO outbox (id, tenant_id, kind, payload, state, next_at, created_at, updated_at) VALUES (?,?,?,?, 'pending', ?, ?, ?)"
     ).run(newId("out"), tenantId, "spend.dispatch", JSON.stringify({ spendIntentId: intentId }), ts, ts, ts);
     audit(db, null, tenantId, "spend.reserved", "spend_intent", intentId, {
       refreshId,
@@ -158,7 +158,7 @@ export async function dispatchSpend(db: DB, providers: ProviderSet, spendIntentI
         if (res.status === "settled") {
           db.prepare("UPDATE refreshes SET state = 'awaiting_source', updated_at = ? WHERE id = ?").run(ts, refresh.id);
           db.prepare(
-            "INSERT INTO outbox (id, tenant_id, kind, payload, state, next_at, created_at, updated_at) VALUES (?,?,?, 'pending', ?, ?, ?)"
+            "INSERT INTO outbox (id, tenant_id, kind, payload, state, next_at, created_at, updated_at) VALUES (?,?,?,?, 'pending', ?, ?, ?)"
           ).run(newId("out"), tenantId, "source.fetch", JSON.stringify({ refreshId: refresh.id, spendIntentId: intent.id }), ts, ts, ts);
         } else if (res.status === "pending") {
           db.prepare("UPDATE refreshes SET state = 'reconciling', updated_at = ? WHERE id = ?").run(ts, refresh.id);
