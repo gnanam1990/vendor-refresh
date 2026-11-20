@@ -40,16 +40,18 @@ export function seed(db: DB): SeedResult {
   };
 
   // Policy v1: $0.05 per call, $0.10 cumulative cap (acceptance-scene values).
+  // VR_STALE_AFTER overrides the staleness window for demos/tests.
+  const staleAfter = Number(process.env.VR_STALE_AFTER ?? 30 * 24 * 3600);
   db.prepare(
     `INSERT OR IGNORE INTO policies
        (id, tenant_id, version, stale_after_seconds, per_call_max_minor, cumulative_cap_minor, currency, approved_providers, active, created_at)
      VALUES (?,?,?,?,?,?,?,?,?,?)`
-  ).run(newId("pol"), tenantA, 1, 30 * 24 * 3600, 5, 10, "USD", JSON.stringify(["fixture-sirene"]), 1, t);
+  ).run(newId("pol"), tenantA, 1, staleAfter, 5, 10, "USD", JSON.stringify(["fixture-sirene"]), 1, t);
   db.prepare(
     `INSERT OR IGNORE INTO policies
        (id, tenant_id, version, stale_after_seconds, per_call_max_minor, cumulative_cap_minor, currency, approved_providers, active, created_at)
      VALUES (?,?,?,?,?,?,?,?,?,?)`
-  ).run(newId("pol"), tenantB, 1, 30 * 24 * 3600, 5, 10, "USD", JSON.stringify(["fixture-sirene"]), 1, t);
+  ).run(newId("pol"), tenantB, 1, staleAfter, 5, 10, "USD", JSON.stringify(["fixture-sirene"]), 1, t);
 
   return { tenantA, tenantB, users, usersB };
 }

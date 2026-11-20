@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { FIELD_RETENTION, hashPayload, type RegistryFetchResult, type RegistryProvider, type RegistryQuote, type RegistryRecord, type RegistryStatus } from "./registry.ts";
 import { newId } from "../db.ts";
 
@@ -15,10 +16,12 @@ export type FixtureFault =
   | "unavailable" // quote/status fail closed
   | "missing_status"; // record lacks the optional status field
 
-interface FixtureRow {
+export interface FixtureRow {
   siren: string;
   legal_name: string;
   status?: string;
+  omit_status?: boolean;
+  quote_minor?: number;
   address: RegistryRecord["address"];
   effective_at: string;
 }
@@ -31,16 +34,22 @@ export class FixtureRegistry implements RegistryProvider {
   rows: Map<string, FixtureRow>;
 
   constructor(rows?: FixtureRow[]) {
-    this.rows = new Map((rows ?? defaultFixtureRows()).map((r) => [r.siren, r]));
+    this.rows = new Map((rows ?? []).map((r) => [r.siren, r]));
+  }
+
+  static fromFile(path: string): FixtureRegistry {
+    const data = JSON.parse(readFileSync(path, "utf8")) as FixtureRow[];
+    return new FixtureRegistry(data);
   }
 
   async quote(siren: string): Promise<RegistryQuote> {
     if (this.fault === "unavailable") throw new Error("fixture-sirene unavailable");
+    const row = this.rows.get(siren);
     return {
       provider: this.name,
       listingId: `lst_${this.name}_entity`,
       siren,
-      amountMinor: this.quoteAmountMinor,
+      amountMinor: row?.quote_minor ?? this.quoteAmountMinor,
       currency: this.quoteCurrency,
       expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
       metadata: {
@@ -61,7 +70,7 @@ export class FixtureRegistry implements RegistryProvider {
     if (this.fault === "unavailable") throw new Error("fixture-sirene unavailable");
     const row = this.rows.get(order.siren);
     const wrongSiren = this.fault === "wrong_siren" ? "999999999" : order.siren;
-    const includeStatus = this.fault !== "missing_status";
+    const includeStatus = this.fault !== "missing_status" && !row?.omit_status;
     const record: RegistryRecord = row
       ? {
           siren: wrongSiren,
@@ -99,10 +108,4 @@ export class FixtureRegistry implements RegistryProvider {
     if (this.fault === "unavailable") throw new Error("fixture-sirene unavailable");
     return { remoteRef, state: "unknown" };
   }
-}
-
-function defaultFixtureRows(): FixtureRow[] {
-  // Synthetic Luhn-valid SIRENs produced by the seed helper where needed; the
-  // rows below are keyed by whatever SIREN callers register.
-  return [];
 }

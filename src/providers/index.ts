@@ -9,8 +9,9 @@ export interface ProviderSet {
   railName: string;
 }
 
-export function createProviderSet(_db: DB, opts: { rail?: string } = {}): ProviderSet {
-  const registry = new FixtureRegistry();
+export function createProviderSet(_db: DB, opts: { rail?: string; fixtureData?: string } = {}): ProviderSet {
+  const fixtureData = opts.fixtureData ?? process.env.VR_FIXTURE_DATA;
+  const registry = fixtureData ? FixtureRegistry.fromFile(fixtureData) : new FixtureRegistry();
   const railName = opts.rail ?? "local-emulator";
   const rail: PaymentRail = railName === "kite-passport" ? new DisabledPassportRail() : new LocalEmulatorRail();
   return { registry, rail, railName };
