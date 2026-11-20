@@ -50,33 +50,27 @@ export async function processRefresh(db: DB, providers: ProviderSet, refreshId: 
     blockRefresh(db, refresh, `quote_failed: ${(e as Error).message}`);
     return;
   }
-  if (!policy.approvedProviders.includes(quote.provider)) {
+  const rejectQuote = (reason: string) =>
     tx(db, () => {
-      persistQuote(db, tenantId, quote, "rejected");
-      blockRefresh(db, refresh, `provider_not_approved: ${quote.provider}`);
+      const qid = persistQuote(db, tenantId, quote, "rejected");
+      db.prepare("UPDATE refreshes SET quote_id = ? WHERE id = ?").run(qid, refresh.id);
+      blockRefresh(db, refresh, reason);
     });
+  if (!policy.approvedProviders.includes(quote.provider)) {
+    rejectQuote(`provider_not_approved: ${quote.provider}`);
     return;
   }
   if (quote.currency !== policy.currency) {
-    tx(db, () => {
-      persistQuote(db, tenantId, quote, "rejected");
-      blockRefresh(db, refresh, `currency_mismatch: quote ${quote.currency} vs policy ${policy.currency}`);
-    });
+    rejectQuote(`currency_mismatch: quote ${quote.currency} vs policy ${policy.currency}`);
     return;
   }
   if (quote.amountMinor > policy.perCallMaxMinor) {
-    tx(db, () => {
-      persistQuote(db, tenantId, quote, "rejected");
-      blockRefresh(db, refresh, `over_per_call_cap: quote ${quote.amountMinor}${quote.currency} exceeds ${policy.perCallMaxMinor}`);
-    });
+    rejectQuote(`over_per_call_cap: quote ${quote.amountMinor}${quote.currency} exceeds ${policy.perCallMaxMinor}`);
     return;
   }
   const committed = committedMinor(db, tenantId);
   if (committed + quote.amountMinor > policy.cumulativeCapMinor) {
-    tx(db, () => {
-      persistQuote(db, tenantId, quote, "rejected");
-      blockRefresh(db, refresh, `over_cumulative_cap: committed ${committed} + quote ${quote.amountMinor} exceeds ${policy.cumulativeCapMinor}`);
-    });
+    rejectQuote(`over_cumulative_cap: committed ${committed} + quote ${quote.amountMinor} exceeds ${policy.cumulativeCapMinor}`);
     return;
   }
 

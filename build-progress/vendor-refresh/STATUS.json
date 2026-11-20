@@ -1,7 +1,7 @@
 {
   "project": "Vendor Refresh",
   "packVersion": "1.0",
-  "testedSha": "2c513ce717490e2e1c530bb4898f56042682f8a7",
+  "testedSha": "91c843038a74e1a0ba90ff4376888ef81205525f",
   "targetBranch": "devin/vendor-refresh",
   "modules": [
     {
@@ -46,16 +46,20 @@
     {
       "id": "M04",
       "title": "Delegated spending and recovery",
-      "state": "active",
-      "owner": null,
-      "commands": [],
-      "evidence": [],
+      "state": "accepted",
+      "owner": "devin-local",
+      "commands": [
+        "npm test (16 pass incl. T-007,T-008)"
+      ],
+      "evidence": [
+        "test/m04-spend.test.ts"
+      ],
       "nextAction": "Bind the selected listing, amount, currency and grant to an intent. Use transactional reservations plus outbox, receipt matching and reconciliation."
     },
     {
       "id": "M05",
       "title": "Field differences and decisions",
-      "state": "pending",
+      "state": "active",
       "owner": null,
       "commands": [],
       "evidence": [],
