@@ -1,7 +1,7 @@
 {
   "project": "Vendor Refresh",
   "packVersion": "1.0",
-  "testedSha": "1d65eff5113e2f85b2ab365bc0cdd5190be8552e",
+  "testedSha": "d65ae5756f17189b7248acde5c35a864c4f38af2",
   "targetBranch": "devin/vendor-refresh",
   "modules": [
     {
@@ -85,10 +85,14 @@
     {
       "id": "M07",
       "title": "Close, export and pilot evidence",
-      "state": "active",
-      "owner": null,
-      "commands": [],
-      "evidence": [],
+      "state": "accepted",
+      "owner": "devin-local",
+      "commands": [
+        "npm test (26 pass incl. T-013,T-014)"
+      ],
+      "evidence": [
+        "test/m07-export.test.ts"
+      ],
       "nextAction": "Build paginated accepted-change export, spend reconciliation and pilot report of paid checks, unresolved items and analyst time."
     }
   ]

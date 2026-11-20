@@ -8,6 +8,7 @@ import { createRefresh } from "../services/refreshService.ts";
 import { decide } from "../services/decisionService.ts";
 import { createException } from "../services/exceptionService.ts";
 import { activePolicy } from "../services/policy.ts";
+import { acceptedExport, reconciliation, pilotReport } from "../services/exportService.ts";
 import { notFound } from "../domain/errors.ts";
 import type { ProviderSet } from "../providers/index.ts";
 
@@ -353,5 +354,37 @@ export function registerPages(r: Router, _providers: ProviderSet): void {
     const b = ctx.body as Record<string, string>;
     const out = createException(ctx.db, ctx.actor!, { kind: b.kind, detail: b.detail });
     redirect(ctx.res, "/exceptions");
+  });
+
+  r.get("/reconciliation", (ctx: Ctx) => {
+    const rec = reconciliation(ctx.db, ctx.actor!.tenantId);
+    sendHtml(ctx.res, 200, layout("Reconciliation", ctx.actor, `
+      <h1>Spend reconciliation</h1>
+      <p>Settled ${rec.totals.settledMinor} minor units · uncertain intents ${rec.totals.reconcilingCount} · dispatched without receipt ${rec.totals.unreceipted}</p>
+      <table><thead><tr><th scope="col">Intent</th><th scope="col">SIREN</th><th scope="col">Amount</th><th scope="col">Status</th><th scope="col">Remote ref</th><th scope="col">Rail</th></tr></thead>
+      <tbody>${rec.intents.map((i: any) => `<tr>
+        <td><a href="/refreshes/${h(i.refresh_id)}"><code>${h(i.id)}</code></a></td>
+        <td>${h(i.siren)}</td><td>${i.amount_minor} ${h(i.currency)}</td>
+        <td><span class="badge ${h(i.status)}">${h(i.status)}</span></td>
+        <td>${h(i.remote_ref ?? "—")}</td><td>${h(i.rail)}</td></tr>`).join("")}</tbody></table>`));
+  });
+
+  r.get("/exports", (ctx: Ctx) => {
+    const cursor = ctx.query.get("cursor");
+    const canExport = ctx.actor!.role === "finance_admin";
+    const out = canExport ? acceptedExport(ctx.db, ctx.actor!.tenantId, cursor) : { rows: [], nextCursor: null };
+    const pilot = pilotReport(ctx.db, ctx.actor!.tenantId);
+    sendHtml(ctx.res, 200, layout("Exports", ctx.actor, `
+      <h1>Accepted-change export</h1>
+      ${canExport ? `
+      <p>Only accepted field deltas are exported; dismissed, unknown and superseded evidence is excluded.</p>
+      <p><a class="btn" href="/v1/exports/accepted?format=csv">Download CSV</a></p>
+      <table><thead><tr><th scope="col">SIREN</th><th scope="col">Field</th><th scope="col">From</th><th scope="col">To</th><th scope="col">Decided at</th><th scope="col">Source</th></tr></thead>
+      <tbody>${out.rows.map((row) => `<tr>
+        <td>${h(row.siren)}</td><td>${h(row.field)}</td><td>${h(row.acceptedFrom ?? "—")}</td><td>${h(row.acceptedTo ?? "—")}</td>
+        <td>${h(row.decidedAt)}</td><td>${h(row.source ?? "")} · eff ${h(row.sourceEffectiveAt ?? "—")}</td></tr>`).join("")}</tbody></table>
+      ${out.nextCursor ? `<p><a class="btn" href="/exports?cursor=${h(out.nextCursor)}">Next page</a></p>` : ""}` : "<p>Export requires the finance_admin role.</p>"}
+      <section aria-labelledby="pilot"><h2 id="pilot">Pilot evidence (local)</h2>
+      <pre>${h(JSON.stringify(pilot, null, 2))}</pre></section>`));
   });
 }

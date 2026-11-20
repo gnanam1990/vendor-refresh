@@ -6,6 +6,7 @@ import { scanFreshness, openCaseList } from "../services/scan.ts";
 import { createRefresh } from "../services/refreshService.ts";
 import { decide } from "../services/decisionService.ts";
 import { createException } from "../services/exceptionService.ts";
+import { acceptedExport, exportCsv, reconciliation, pilotReport } from "../services/exportService.ts";
 import { badRequest, notFound } from "../domain/errors.ts";
 import { newId } from "../db.ts";
 
@@ -203,6 +204,29 @@ export function registerApi(r: Router): void {
       .prepare("SELECT * FROM exceptions WHERE tenant_id = ? ORDER BY created_at DESC")
       .all(ctx.actor!.tenantId);
     sendJson(ctx.res, 200, { exceptions: rows });
+  });
+
+  r.get("/v1/exports/accepted", (ctx: Ctx) => {
+    requireRole(ctx.actor!, "export");
+    const cursor = ctx.query.get("cursor");
+    const out = acceptedExport(ctx.db, ctx.actor!.tenantId, cursor);
+    if (ctx.query.get("format") === "csv") {
+      ctx.res.writeHead(200, {
+        "content-type": "text/csv; charset=utf-8",
+        "content-disposition": "attachment; filename=accepted-changes.csv",
+      });
+      ctx.res.end(exportCsv(out.rows));
+      return;
+    }
+    sendJson(ctx.res, 200, out);
+  });
+
+  r.get("/v1/reconciliation", (ctx: Ctx) => {
+    sendJson(ctx.res, 200, reconciliation(ctx.db, ctx.actor!.tenantId));
+  });
+
+  r.get("/v1/reports/pilot", (ctx: Ctx) => {
+    sendJson(ctx.res, 200, pilotReport(ctx.db, ctx.actor!.tenantId));
   });
 
   r.get("/v1/imports/:id", (ctx: Ctx) => {
