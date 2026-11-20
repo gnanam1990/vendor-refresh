@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "project": "Vendor Refresh",
+  "version": "1.0",
+  "status": "SPECIFICATION_ONLY",
+  "implementation": "NOT_RUN",
+  "productTests": "NOT_RUN",
+  "deployment": "NOT_RUN",
+  "marketValidation": "UNPROVEN",
+  "counts": {
+    "functional": 7,
+    "nonfunctional": 1,
+    "invariants": 7,
+    "modules": 7,
+    "testCases": 14
+  }
+}

@@ -1,0 +1,313 @@
+{
+  "schemaVersion": 1,
+  "status": "SPECIFICATION_ONLY",
+  "definitions": {
+    "functional": [
+      {
+        "id": "FR-01",
+        "title": "Vendor master and invoices",
+        "definition": "Build CSV preview, explicit column mapping, SIREN validation and tenant-scoped deduplication. Save raw permitted values alongside parsed observations."
+      },
+      {
+        "id": "FR-02",
+        "title": "Freshness and conflict cases",
+        "definition": "Implement a versioned clock-based policy and stable trigger coalescing per accepted supplier revision."
+      },
+      {
+        "id": "FR-03",
+        "title": "Registry adapter and terms",
+        "definition": "Define provider discovery, quoted amount, metadata, source timing and lawful field retention. Implement a real eligible source and record environment evidence."
+      },
+      {
+        "id": "FR-04",
+        "title": "Delegated spending and recovery",
+        "definition": "Bind the selected listing, amount, currency and grant to an intent. Use transactional reservations plus outbox, receipt matching and reconciliation."
+      },
+      {
+        "id": "FR-05",
+        "title": "Field differences and decisions",
+        "definition": "Produce field-level deltas with source originals, effective dates and comparison rules. Apply an accepted decision using optimistic concurrency."
+      },
+      {
+        "id": "FR-06",
+        "title": "AP inbox and sensitive exceptions",
+        "definition": "Build accessible case list, decision screen, exception routing and redacted evidence preview."
+      },
+      {
+        "id": "FR-07",
+        "title": "Close, export and pilot evidence",
+        "definition": "Build paginated accepted-change export, spend reconciliation and pilot report of paid checks, unresolved items and analyst time."
+      }
+    ],
+    "nonfunctional": [
+      {
+        "id": "NFR-01",
+        "title": "Replayable evidence",
+        "definition": "A reviewer can reproduce the outcome from the exact input revision, actor scope, persisted decision and redacted evidence reference after a process restart."
+      }
+    ],
+    "invariants": [
+      {
+        "id": "INV-01",
+        "title": "Vendor master and invoices",
+        "definition": "An ambiguous match cannot link an invoice or open a paid refresh."
+      },
+      {
+        "id": "INV-02",
+        "title": "Freshness and conflict cases",
+        "definition": "Replaying one import cannot create another billable trigger for that version."
+      },
+      {
+        "id": "INV-03",
+        "title": "Registry adapter and terms",
+        "definition": "Every changed field identifies the source snapshot and applicable timestamp."
+      },
+      {
+        "id": "INV-04",
+        "title": "Delegated spending and recovery",
+        "definition": "Every charge belongs to one refresh; a timed-out payment cannot trigger a second purchase automatically."
+      },
+      {
+        "id": "INV-05",
+        "title": "Field differences and decisions",
+        "definition": "Only a current reviewed revision can become the accepted supplier snapshot."
+      },
+      {
+        "id": "INV-06",
+        "title": "AP inbox and sensitive exceptions",
+        "definition": "Public company matching can never authorize a beneficiary-account change."
+      },
+      {
+        "id": "INV-07",
+        "title": "Close, export and pilot evidence",
+        "definition": "Dismissed, unknown and superseded observations are excluded from accepted exports."
+      }
+    ]
+  },
+  "tests": [
+    {
+      "id": "T-001",
+      "title": "Vendor master and invoices • expected behavior",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "T-002",
+      "title": "Vendor master and invoices • failure boundary",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "T-003",
+      "title": "Freshness and conflict cases • expected behavior",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "T-004",
+      "title": "Freshness and conflict cases • failure boundary",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "T-005",
+      "title": "Registry adapter and terms • expected behavior",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "T-006",
+      "title": "Registry adapter and terms • failure boundary",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "T-007",
+      "title": "Delegated spending and recovery • expected behavior",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "T-008",
+      "title": "Delegated spending and recovery • failure boundary",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "T-009",
+      "title": "Field differences and decisions • expected behavior",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "T-010",
+      "title": "Field differences and decisions • failure boundary",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "T-011",
+      "title": "AP inbox and sensitive exceptions • expected behavior",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "T-012",
+      "title": "AP inbox and sensitive exceptions • failure boundary",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "T-013",
+      "title": "Close, export and pilot evidence • expected behavior",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "T-014",
+      "title": "Close, export and pilot evidence • failure boundary",
+      "status": "NOT_RUN"
+    }
+  ],
+  "modules": [
+    {
+      "id": "M01",
+      "name": "Vendor master and invoices",
+      "file": "prompts/M01.md",
+      "requirements": [
+        "FR-01"
+      ],
+      "nonfunctional": [
+        "NFR-01"
+      ],
+      "invariants": [
+        "INV-01"
+      ],
+      "tests": [
+        "T-001",
+        "T-002"
+      ],
+      "dependsOn": [],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "M02",
+      "name": "Freshness and conflict cases",
+      "file": "prompts/M02.md",
+      "requirements": [
+        "FR-02"
+      ],
+      "nonfunctional": [
+        "NFR-01"
+      ],
+      "invariants": [
+        "INV-02"
+      ],
+      "tests": [
+        "T-003",
+        "T-004"
+      ],
+      "dependsOn": [
+        "M01"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "M03",
+      "name": "Registry adapter and terms",
+      "file": "prompts/M03.md",
+      "requirements": [
+        "FR-03"
+      ],
+      "nonfunctional": [
+        "NFR-01"
+      ],
+      "invariants": [
+        "INV-03"
+      ],
+      "tests": [
+        "T-005",
+        "T-006"
+      ],
+      "dependsOn": [
+        "M02"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "M04",
+      "name": "Delegated spending and recovery",
+      "file": "prompts/M04.md",
+      "requirements": [
+        "FR-04"
+      ],
+      "nonfunctional": [
+        "NFR-01"
+      ],
+      "invariants": [
+        "INV-04"
+      ],
+      "tests": [
+        "T-007",
+        "T-008"
+      ],
+      "dependsOn": [
+        "M03"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "M05",
+      "name": "Field differences and decisions",
+      "file": "prompts/M05.md",
+      "requirements": [
+        "FR-05"
+      ],
+      "nonfunctional": [
+        "NFR-01"
+      ],
+      "invariants": [
+        "INV-05"
+      ],
+      "tests": [
+        "T-009",
+        "T-010"
+      ],
+      "dependsOn": [
+        "M04"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "M06",
+      "name": "AP inbox and sensitive exceptions",
+      "file": "prompts/M06.md",
+      "requirements": [
+        "FR-06"
+      ],
+      "nonfunctional": [
+        "NFR-01"
+      ],
+      "invariants": [
+        "INV-06"
+      ],
+      "tests": [
+        "T-011",
+        "T-012"
+      ],
+      "dependsOn": [
+        "M05"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "M07",
+      "name": "Close, export and pilot evidence",
+      "file": "prompts/M07.md",
+      "requirements": [
+        "FR-07"
+      ],
+      "nonfunctional": [
+        "NFR-01"
+      ],
+      "invariants": [
+        "INV-07"
+      ],
+      "tests": [
+        "T-013",
+        "T-014"
+      ],
+      "dependsOn": [
+        "M06"
+      ],
+      "status": "NOT_RUN"
+    }
+  ]
+}
