@@ -1,0 +1,17 @@
+{
+  "name": "vendor-refresh",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Vendor Refresh - AP vendor evidence refresh for French legal entities (SIREN)",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "start": "node src/main.ts",
+    "worker": "node src/worker.ts",
+    "seed": "node src/seed.ts",
+    "migrate": "node -e \"import('./src/db.ts').then(m=>{const db=m.openDb(process.env.VR_DB||'vendor-refresh.db');console.log('migrated')})\"",
+    "test": "node --test \"test/**/*.test.ts\""
+  }
+}

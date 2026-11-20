@@ -1,0 +1,146 @@
+{
+  "project": "Vendor Refresh",
+  "packVersion": "1.0",
+  "testedSha": "8cdb5a8aae5292e1b509a4511336160578946dfa",
+  "targetBranch": "devin/vendor-refresh",
+  "modules": [
+    {
+      "id": "M01",
+      "title": "Vendor master and invoices",
+      "state": "accepted",
+      "owner": "devin-local",
+      "commands": [
+        "npm test (6 pass: T-001,T-002,T-002b,INV-01,cross-tenant,read-only)"
+      ],
+      "evidence": [
+        "test/m01-import.test.ts"
+      ],
+      "nextAction": "Build CSV preview, explicit column mapping, SIREN validation and tenant-scoped deduplication. Save raw permitted values alongside parsed observations."
+    },
+    {
+      "id": "M02",
+      "title": "Freshness and conflict cases",
+      "state": "accepted",
+      "owner": "devin-local",
+      "commands": [
+        "npm test (9 pass incl. T-003,T-004)"
+      ],
+      "evidence": [
+        "test/m02-freshness.test.ts"
+      ],
+      "nextAction": "Implement a versioned clock-based policy and stable trigger coalescing per accepted supplier revision."
+    },
+    {
+      "id": "M03",
+      "title": "Registry adapter and terms",
+      "state": "accepted",
+      "owner": "devin-local",
+      "commands": [
+        "npm test (12 pass incl. T-005,T-006)"
+      ],
+      "evidence": [
+        "test/m03-registry.test.ts"
+      ],
+      "nextAction": "Define provider discovery, quoted amount, metadata, source timing and lawful field retention. Implement a real eligible source and record environment evidence."
+    },
+    {
+      "id": "M04",
+      "title": "Delegated spending and recovery",
+      "state": "accepted",
+      "owner": "devin-local",
+      "commands": [
+        "npm test (16 pass incl. T-007,T-008)"
+      ],
+      "evidence": [
+        "test/m04-spend.test.ts"
+      ],
+      "nextAction": "Bind the selected listing, amount, currency and grant to an intent. Use transactional reservations plus outbox, receipt matching and reconciliation."
+    },
+    {
+      "id": "M05",
+      "title": "Field differences and decisions",
+      "state": "accepted",
+      "owner": "devin-local",
+      "commands": [
+        "npm test (20 pass incl. T-009,T-010)"
+      ],
+      "evidence": [
+        "test/m05-decisions.test.ts"
+      ],
+      "nextAction": "Produce field-level deltas with source originals, effective dates and comparison rules. Apply an accepted decision using optimistic concurrency."
+    },
+    {
+      "id": "M06",
+      "title": "AP inbox and sensitive exceptions",
+      "state": "accepted",
+      "owner": "devin-local",
+      "commands": [
+        "npm test (23 pass incl. T-011,T-012)"
+      ],
+      "evidence": [
+        "test/m06-inbox.test.ts"
+      ],
+      "nextAction": "Build accessible case list, decision screen, exception routing and redacted evidence preview."
+    },
+    {
+      "id": "M07",
+      "title": "Close, export and pilot evidence",
+      "state": "accepted",
+      "owner": "devin-local",
+      "commands": [
+        "npm test (26 pass incl. T-013,T-014)"
+      ],
+      "evidence": [
+        "test/m07-export.test.ts"
+      ],
+      "nextAction": "Build paginated accepted-change export, spend reconciliation and pilot report of paid checks, unresolved items and analyst time."
+    }
+  ],
+  "tests": {
+    "T001": "PASS",
+    "T002": "PASS",
+    "T003": "PASS",
+    "T004": "PASS",
+    "T005": "PASS",
+    "T006": "PASS",
+    "T007": "PASS",
+    "T008": "PASS",
+    "T009": "PASS",
+    "T010": "PASS",
+    "T011": "PASS",
+    "T012": "PASS",
+    "T013": "PASS",
+    "T014": "PASS",
+    "T015a": "PASS",
+    "T015b": "PASS",
+    "T015c": "PASS",
+    "T015d": "PASS",
+    "T015e": "PASS"
+  },
+  "environmentProof": {
+    "unitAndIntegration": "npm test — 31/31 pass on Node v22.23.1 incl. authz regression (T-015a..e); clean checkout verified at 8cdb5a8 (26/26 pre-auth)",
+    "endToEnd": "node scripts/acceptance.mjs — all 7 reference steps pass incl. mid-flow restart, actors authenticated via credential login",
+    "ui": "DOM-free HTML contract replay of the full journey: 28/28 checks (selectors, labels, error pages, version bump, permission surfaces)",
+    "browser": "scripts/browser-check.mjs runnable CDP check — launch BLOCKED in agent sandbox (Mach bootstrap denied); replay on host per build-progress/vendor-refresh/BROWSER.md; evidence at build-progress/vendor-refresh/evidence/browser/evidence.json"
+  },
+  "externalDependencies": [
+    {
+      "dep": "Live French registry (SIRENE) adapter",
+      "status": "UNAVAILABLE_IN_RUN",
+      "substitute": "fixture-sirene provider (VR_FIXTURE_DATA)",
+      "missingProof": "real service id, endpoint, quote+execute against authorized test env"
+    },
+    {
+      "dep": "Session-bound paid execution (Kite Passport)",
+      "status": "NOT_AUTHORIZED",
+      "substitute": "local-emulator rail; kite-passport rail fails closed at dispatch",
+      "missingProof": "owner authority covering seller, rail, amount, purpose; effective payment-source check at dispatch"
+    },
+    {
+      "dep": "AP outsourcer pilot (30 consenting vendor records)",
+      "status": "NOT_STARTED",
+      "substitute": "synthetic Luhn-valid fixtures",
+      "missingProof": "pilot agreement + redacted master + manual-comparison results"
+    }
+  ]
+}
