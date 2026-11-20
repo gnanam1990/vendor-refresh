@@ -2,3 +2,5 @@ vendor-refresh.db*
 .acceptance-*/
 .clean-checkout/
 node_modules/
+credentials.seed.json
+.browser-*/
