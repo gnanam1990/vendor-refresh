@@ -1,7 +1,7 @@
 {
   "project": "Vendor Refresh",
   "packVersion": "1.0",
-  "testedSha": "d65ae5756f17189b7248acde5c35a864c4f38af2",
+  "testedSha": "8cdb5a8aae5292e1b509a4511336160578946dfa",
   "targetBranch": "devin/vendor-refresh",
   "modules": [
     {
@@ -94,6 +94,47 @@
         "test/m07-export.test.ts"
       ],
       "nextAction": "Build paginated accepted-change export, spend reconciliation and pilot report of paid checks, unresolved items and analyst time."
+    }
+  ],
+  "tests": {
+    "T001": "PASS",
+    "T002": "PASS",
+    "T003": "PASS",
+    "T004": "PASS",
+    "T005": "PASS",
+    "T006": "PASS",
+    "T007": "PASS",
+    "T008": "PASS",
+    "T009": "PASS",
+    "T010": "PASS",
+    "T011": "PASS",
+    "T012": "PASS",
+    "T013": "PASS",
+    "T014": "PASS"
+  },
+  "environmentProof": {
+    "unitAndIntegration": "npm test — 26/26 pass on Node v22.23.1, clean checkout .clean-checkout at 8cdb5a8aae5292e1b509a4511336160578946dfa",
+    "endToEnd": "node scripts/acceptance.mjs — all 7 reference steps pass incl. mid-flow restart",
+    "ui": "manual smoke: /login /inbox /imports/new /exceptions /reconciliation all HTTP 200"
+  },
+  "externalDependencies": [
+    {
+      "dep": "Live French registry (SIRENE) adapter",
+      "status": "UNAVAILABLE_IN_RUN",
+      "substitute": "fixture-sirene provider (VR_FIXTURE_DATA)",
+      "missingProof": "real service id, endpoint, quote+execute against authorized test env"
+    },
+    {
+      "dep": "Session-bound paid execution (Kite Passport)",
+      "status": "NOT_AUTHORIZED",
+      "substitute": "local-emulator rail; kite-passport rail fails closed at dispatch",
+      "missingProof": "owner authority covering seller, rail, amount, purpose; effective payment-source check at dispatch"
+    },
+    {
+      "dep": "AP outsourcer pilot (30 consenting vendor records)",
+      "status": "NOT_STARTED",
+      "substitute": "synthetic Luhn-valid fixtures",
+      "missingProof": "pilot agreement + redacted master + manual-comparison results"
     }
   ]
 }
