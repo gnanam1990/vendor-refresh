@@ -1,3 +1,4 @@
+import { dirname, resolve } from "node:path";
 import { openDb } from "./db.ts";
 import { Router, createApp } from "./http/server.ts";
 import { registerApi } from "./http/api.ts";
@@ -6,9 +7,14 @@ import { seed } from "./seed.ts";
 import { startWorker } from "./worker.ts";
 import { createProviderSet } from "./providers/index.ts";
 
-const db = openDb(process.env.VR_DB ?? "vendor-refresh.db");
+const dbPath = process.env.VR_DB ?? "vendor-refresh.db";
+const db = openDb(dbPath);
 const autoSeed = process.env.VR_SEED !== "0";
-if (autoSeed) seed(db);
+if (autoSeed) {
+  const credFile = dbPath === ":memory:" ? undefined : resolve(dirname(dbPath), "credentials.seed.json");
+  seed(db, { credFile });
+  if (credFile) console.log(`provisioned credentials written to ${credFile} (mode 600, synthetic local users)`);
+}
 
 const providers = createProviderSet(db, {
   rail: process.env.VR_RAIL ?? "local-emulator",

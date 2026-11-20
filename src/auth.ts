@@ -1,3 +1,4 @@
+import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import type { DB } from "./db.ts";
 import { newId, now } from "./db.ts";
 import { forbidden, unauthorized } from "./domain/errors.ts";
@@ -9,6 +10,32 @@ export interface Actor {
   tenantId: string;
   name: string;
   role: Role;
+}
+
+/** Provision an opaque credential for a user; stored only as a salted scrypt hash. */
+export function setCredential(db: DB, userId: string, credential: string): void {
+  const salt = randomBytes(16).toString("hex");
+  const hash = scryptSync(credential, salt, 32).toString("hex");
+  db.prepare("UPDATE users SET credential_hash = ?, credential_salt = ? WHERE id = ?").run(
+    hash,
+    salt,
+    userId
+  );
+}
+
+export function verifyCredential(db: DB, userId: string, credential: string): boolean {
+  const u = db
+    .prepare("SELECT credential_hash, credential_salt FROM users WHERE id = ?")
+    .get(userId) as { credential_hash: string | null; credential_salt: string | null } | undefined;
+  if (!u?.credential_hash || !u.credential_salt) return false;
+  const candidate = scryptSync(credential, u.credential_salt, 32);
+  return timingSafeEqual(candidate, Buffer.from(u.credential_hash, "hex"));
+}
+
+/** Real local authenticator: a session is minted only after the credential verifies. */
+export function login(db: DB, userId: string, credential: string): string {
+  if (!verifyCredential(db, userId, credential)) throw unauthorized("invalid user or credential");
+  return createSession(db, userId);
 }
 
 export function createSession(db: DB, userId: string): string {

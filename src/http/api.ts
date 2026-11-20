@@ -1,6 +1,6 @@
 import type { Router, Ctx } from "./server.ts";
 import { sendJson } from "./server.ts";
-import { createSession, requireRole, assertCanWrite } from "../auth.ts";
+import { createSession, login, requireRole, assertCanWrite } from "../auth.ts";
 import { runImport, preview, allowedFields, type ImportKind } from "../services/importService.ts";
 import { scanFreshness, openCaseList } from "../services/scan.ts";
 import { createRefresh } from "../services/refreshService.ts";
@@ -18,8 +18,20 @@ function csvAndMapping(body: unknown): { csv: string; mapping: Record<string, st
 }
 
 export function registerApi(r: Router): void {
-  // Local development login: pick a seeded user. No passwords in this build.
+  // Real local authenticator: session is minted only after credential verification.
+  r.post("/v1/session/login", (ctx: Ctx) => {
+    const b = ctx.body as Record<string, unknown>;
+    const token = login(ctx.db, String(b.user_id ?? ""), String(b.credential ?? ""));
+    ctx.res.setHeader("set-cookie", `vr_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax`);
+    sendJson(ctx.res, 200, { ok: true, token });
+  }, "optional");
+
+  // Identity-selection shortcut for explicitly opted-in development fixtures ONLY.
+  // Disabled unless VR_DEV_LOGIN=1; never a route to production-like authority.
   r.post("/v1/session/dev-login", (ctx: Ctx) => {
+    if (process.env.VR_DEV_LOGIN !== "1") {
+      throw badRequest("dev_login_disabled", "dev-login requires VR_DEV_LOGIN=1 (development fixtures only)");
+    }
     const userId = String((ctx.body as Record<string, unknown>).user_id ?? "");
     const token = createSession(ctx.db, userId);
     ctx.res.setHeader("set-cookie", `vr_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax`);

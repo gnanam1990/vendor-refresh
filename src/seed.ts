@@ -1,5 +1,7 @@
+import { writeFileSync } from "node:fs";
 import type { DB } from "./db.ts";
 import { newId, now } from "./db.ts";
+import { setCredential } from "./auth.ts";
 import { luhnCheckDigit } from "./domain/siren.ts";
 
 export interface SeedResult {
@@ -9,13 +11,27 @@ export interface SeedResult {
   usersB: Record<string, string>;
 }
 
+/**
+ * Provisioned credential for a seeded local demo user. Synthetic fixture value:
+ * a real scrypt-verified secret provisioned server-side, unique per user.
+ * VR_SEED_CREDENTIAL_PREFIX overrides the prefix (e.g. per-environment secrets).
+ */
+export function seedCredential(userId: string): string {
+  return `${process.env.VR_SEED_CREDENTIAL_PREFIX ?? "localdev"}-${userId}`;
+}
+
+export interface SeedOpts {
+  /** If set, write provisioned credentials here (mode 600) for local operator use. */
+  credFile?: string;
+}
+
 /** Build a Luhn-valid SIREN from a numeric base for fixtures/tests. */
 export function makeSiren(base: number): string {
   const b8 = String(base).padStart(8, "0").slice(-8);
   return b8 + luhnCheckDigit(b8);
 }
 
-export function seed(db: DB): SeedResult {
+export function seed(db: DB, opts: SeedOpts = {}): SeedResult {
   const t = now();
   const tenantA = "t_acme";
   const tenantB = "t_other";
@@ -38,6 +54,16 @@ export function seed(db: DB): SeedResult {
     approver: mkUser("u_omar", tenantB, "Omar Outsider", "ap_approver"),
     finance: mkUser("u_olive", tenantB, "Olive Outsider", "finance_admin"),
   };
+
+  // Provision a real credential (salted scrypt hash) for every seeded identity.
+  const creds: Record<string, string> = {};
+  for (const uid of [...Object.values(users), ...Object.values(usersB)]) {
+    creds[uid] = seedCredential(uid);
+    setCredential(db, uid, creds[uid]);
+  }
+  if (opts.credFile) {
+    writeFileSync(opts.credFile, JSON.stringify(creds, null, 2) + "\n", { mode: 0o600 });
+  }
 
   // Policy v1: $0.05 per call, $0.10 cumulative cap (acceptance-scene values).
   // VR_STALE_AFTER overrides the staleness window for demos/tests.

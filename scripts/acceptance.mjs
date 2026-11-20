@@ -7,7 +7,7 @@
  *   node scripts/acceptance.mjs
  */
 import { spawn } from "node:child_process";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
@@ -87,8 +87,11 @@ async function call(token, method, path, body) {
   });
   return { status: r.status, json: await r.json().catch(() => null) };
 }
+// Provisioned credentials written by the seeder (mode 600, synthetic local users).
+const creds = () => JSON.parse(readFileSync(join(dir, "credentials.seed.json"), "utf8"));
 async function login(userId) {
-  const r = await call(null, "POST", "/v1/session/dev-login", { user_id: userId });
+  const r = await call(null, "POST", "/v1/session/login", { user_id: userId, credential: creds()[userId] });
+  if (r.status !== 200) fail(`login failed for ${userId}: ${r.status}`);
   return r.json.token;
 }
 async function waitState(token, refreshId, want, tries = 100) {

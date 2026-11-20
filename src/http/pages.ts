@@ -2,15 +2,28 @@ import type { Router, Ctx } from "./server.ts";
 import { sendHtml, redirect, sendJson } from "./server.ts";
 import { escapeHtml as h } from "../domain/redact.ts";
 import { allowedFields, preview, runImport } from "../services/importService.ts";
-import { createSession, requireRole, type Actor } from "../auth.ts";
+import { createSession, login, requireRole, type Actor } from "../auth.ts";
 import { openCaseList, scanFreshness } from "../services/scan.ts";
 import { createRefresh } from "../services/refreshService.ts";
 import { decide } from "../services/decisionService.ts";
 import { createException } from "../services/exceptionService.ts";
 import { activePolicy } from "../services/policy.ts";
 import { acceptedExport, reconciliation, pilotReport } from "../services/exportService.ts";
-import { notFound } from "../domain/errors.ts";
+import { notFound, AppError } from "../domain/errors.ts";
 import type { ProviderSet } from "../providers/index.ts";
+
+/** Render an operator-actionable HTML error for form posts (denied, stale, invalid). */
+export function errorPage(ctx: Ctx, e: unknown, backHref: string, backLabel = "Back"): void {
+  const status = e instanceof AppError ? e.status : 500;
+  const msg = e instanceof Error ? e.message : "unexpected error";
+  const code = e instanceof AppError ? e.code : "internal";
+  const detail = e instanceof AppError && e.detail ? `<p>Detail: <code>${h(JSON.stringify(e.detail))}</code></p>` : "";
+  sendHtml(ctx.res, status, layout(`Error ${status}`, ctx.actor, `
+    <h1>Cannot complete this action</h1>
+    <p role="alert" class="error-text"><strong>${h(code)}</strong> — ${h(msg)}</p>
+    ${detail}
+    <p><a class="btn" href="${h(backHref)}">${h(backLabel)}</a></p>`));
+}
 
 export function layout(title: string, actor: Actor | null, body: string): string {
   const userLine = actor
@@ -43,8 +56,9 @@ main { padding: 20px; max-width: 1100px; }
 .badge.ok, .badge.linked, .badge.settled, .badge.accepted, .badge.review_ready { background: #dff0d8; }
 .badge.error, .badge.blocked, .badge.failed, .badge.reconciling { background: #f2dede; }
 table { border-collapse: collapse; width: 100%; margin: 12px 0; }
-th, td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; }
+th, td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
 th { background: #f4f4f4; }
+main { overflow-x: auto; }
 fieldset { border: 1px solid var(--line); margin: 12px 0; padding: 12px; }
 label { display: block; margin: 8px 0 2px; font-weight: 600; }
 input[type=text], input[type=date], select, textarea { width: 100%; max-width: 640px; padding: 6px; font: inherit; }
@@ -53,7 +67,7 @@ button, .btn { padding: 8px 14px; font: inherit; cursor: pointer; }
 .diff-changed { background: #fff4d6; }
 .diff-unknown { background: #e6e6f0; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
-@media (max-width: 480px) { main { padding: 12px; } th, td { padding: 4px 6px; } }
+@media (max-width: 480px) { main { padding: 12px; } th, td { padding: 4px 6px; font-size: .9em; } table { table-layout: fixed; } }
 </style>
 </head>
 <body>
@@ -80,22 +94,50 @@ ${body}
 }
 
 export function registerPages(r: Router, _providers: ProviderSet): void {
-  r.get("/login", (ctx: Ctx) => {
+  const loginPage = (ctx: Ctx, error = "") => {
     const users = ctx.db.prepare("SELECT u.id, u.name, u.role, t.name AS tenant FROM users u JOIN tenants t ON t.id=u.tenant_id ORDER BY u.tenant_id, u.name").all() as Record<string, string>[];
-    sendHtml(ctx.res, 200, layout("Sign in", ctx.actor, `
-      <h1>Sign in (local development)</h1>
-      <p>This build uses seeded local identities; pick the actor to act as. Roles are enforced server-side.</p>
+    const devMode = process.env.VR_DEV_LOGIN === "1";
+    sendHtml(ctx.res, error ? 401 : 200, layout("Sign in", ctx.actor, `
+      <h1>Sign in</h1>
+      ${error ? `<p role="alert" class="error-text">${h(error)}</p>` : ""}
+      <p>Roles come from stored enrollment; a session is issued only after the provisioned credential verifies.</p>
       <form method="post" action="/login">
-        <fieldset><legend>Choose an actor</legend>
+        <label for="uid">Actor</label>
+        <select id="uid" name="user_id" required>
+          ${users.map((u) => `<option value="${h(u.id)}">${h(u.name)} — ${h(u.role)} (${h(u.tenant)})</option>`).join("")}
+        </select>
+        <label for="cred">Credential</label>
+        <input type="password" id="cred" name="credential" autocomplete="current-password" required>
+        <p><button type="submit">Sign in</button></p>
+      </form>
+      ${devMode ? `<form method="post" action="/login">
+        <input type="hidden" name="dev_login" value="1">
+        <fieldset><legend>Development fixture: one-click identity (VR_DEV_LOGIN=1)</legend>
         ${users.map((u) => `<label style="font-weight:400"><input type="radio" name="user_id" value="${h(u.id)}" required> ${h(u.name)} — ${h(u.role)} (${h(u.tenant)})</label>`).join("")}
         </fieldset>
-        <button type="submit">Sign in</button>
-      </form>`));
-  }, "optional");
+        <button type="submit">Sign in without credential (dev)</button>
+      </form>` : ""}`));
+  };
+
+  r.get("/login", (ctx: Ctx) => loginPage(ctx), "optional");
 
   r.post("/login", (ctx: Ctx) => {
-    const userId = String((ctx.body as Record<string, unknown>).user_id ?? "");
-    const token = createSession(ctx.db, userId);
+    const b = ctx.body as Record<string, unknown>;
+    const userId = String(b.user_id ?? "");
+    let token: string;
+    if (b.dev_login === "1" && process.env.VR_DEV_LOGIN === "1") {
+      token = createSession(ctx.db, userId);
+    } else {
+      try {
+        token = login(ctx.db, userId, String(b.credential ?? ""));
+      } catch (e) {
+        if (e instanceof AppError && e.status === 401) {
+          loginPage(ctx, "Invalid actor or credential.");
+          return;
+        }
+        throw e;
+      }
+    }
     ctx.res.setHeader("set-cookie", `vr_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax`);
     redirect(ctx.res, "/inbox");
   }, "optional");
@@ -165,15 +207,21 @@ export function registerPages(r: Router, _providers: ProviderSet): void {
   });
 
   r.post("/imports/commit", (ctx: Ctx) => {
-    requireRole(ctx.actor!, "import");
     const b = ctx.body as Record<string, string>;
-    const kind = b.kind === "invoice" ? "invoice" : "vendor_master";
-    const mapping: Record<string, string> = {};
-    for (const f of allowedFields(kind)) {
-      const v = b[`map_${f}`];
-      if (v) mapping[f] = v;
+    let result;
+    try {
+      requireRole(ctx.actor!, "import");
+      const kind = b.kind === "invoice" ? "invoice" : "vendor_master";
+      const mapping: Record<string, string> = {};
+      for (const f of allowedFields(kind)) {
+        const v = b[`map_${f}`];
+        if (v) mapping[f] = v;
+      }
+      result = runImport(ctx.db, ctx.actor!, kind, "web-upload.csv", b.csv ?? "", mapping);
+    } catch (e) {
+      errorPage(ctx, e, "/imports/new", "Back to import");
+      return;
     }
-    const result = runImport(ctx.db, ctx.actor!, kind, "web-upload.csv", b.csv ?? "", mapping);
     sendHtml(ctx.res, 200, layout("Import result", ctx.actor, `
       <h1>Import complete</h1>
       <p>Receipt <code>${h(result.importId)}</code>: ${result.rowsOk} ok, ${result.rowsFailed} failed of ${result.rowsTotal}.</p>
@@ -210,9 +258,13 @@ export function registerPages(r: Router, _providers: ProviderSet): void {
   });
 
   r.post("/scan", (ctx: Ctx) => {
-    requireRole(ctx.actor!, "request_refresh");
-    scanFreshness(ctx.db, ctx.actor!.tenantId, ctx.actor);
-    redirect(ctx.res, "/inbox");
+    try {
+      requireRole(ctx.actor!, "request_refresh");
+      scanFreshness(ctx.db, ctx.actor!.tenantId, ctx.actor);
+      redirect(ctx.res, "/inbox");
+    } catch (e) {
+      errorPage(ctx, e, "/inbox", "Back to inbox");
+    }
   });
 
   r.get("/suppliers/:id", (ctx: Ctx) => {
@@ -249,15 +301,19 @@ export function registerPages(r: Router, _providers: ProviderSet): void {
   });
 
   r.post("/suppliers/:id/refreshes", (ctx: Ctx) => {
-    requireRole(ctx.actor!, "request_refresh");
-    const b = ctx.body as Record<string, string>;
-    const out = createRefresh(ctx.db, ctx.actor!, ctx.params.id, {
-      reason: b.reason ?? "",
-      expectedVersion: Number(b.expected_version),
-      key: b.key,
-      triggerId: b.trigger_id || undefined,
-    });
-    redirect(ctx.res, `/refreshes/${out.refresh.id}`);
+    try {
+      requireRole(ctx.actor!, "request_refresh");
+      const b = ctx.body as Record<string, string>;
+      const out = createRefresh(ctx.db, ctx.actor!, ctx.params.id, {
+        reason: b.reason ?? "",
+        expectedVersion: Number(b.expected_version),
+        key: b.key,
+        triggerId: b.trigger_id || undefined,
+      });
+      redirect(ctx.res, `/refreshes/${out.refresh.id}`);
+    } catch (e) {
+      errorPage(ctx, e, `/suppliers/${ctx.params.id}`, "Back to supplier");
+    }
   });
 
   r.get("/refreshes/:id", (ctx: Ctx) => {
@@ -270,6 +326,9 @@ export function registerPages(r: Router, _providers: ProviderSet): void {
     const quote = f.quote_id ? ctx.db.prepare("SELECT * FROM quotes WHERE id = ?").get(f.quote_id) as any : null;
     const policy = activePolicy(ctx.db, ctx.actor!.tenantId);
     const canDecide = ctx.actor!.role === "ap_approver" && f.state === "review_ready";
+    const review = ctx.db
+      .prepare("SELECT r.*, u.name AS actor_name, u.role AS actor_role FROM reviews r JOIN users u ON u.id = r.actor_id WHERE r.refresh_id = ? ORDER BY r.created_at DESC LIMIT 1")
+      .get(f.id) as any;
     sendHtml(ctx.res, 200, layout(`Refresh ${f.id}`, ctx.actor, `
       <h1>Refresh case</h1>
       <p><a href="/suppliers/${h(s.id)}">${h(snap.legal_name ?? s.siren)}</a> · state <span class="badge ${h(f.state)}">${h(f.state)}</span>
@@ -291,6 +350,14 @@ export function registerPages(r: Router, _providers: ProviderSet): void {
           <td><span class="badge ${h(d.outcome === "changed" ? "conflict" : d.outcome)}">${h(d.outcome)}</span></td>
           <td>effective ${h(d.source_effective_at ?? "—")} · retrieved ${h(d.retrieved_at ?? "—")} · ${h(d.source)} · rule ${h(d.rule_version)}</td></tr>`;
       }).join("")}</tbody></table>`}</section>
+      ${review ? `<section aria-labelledby="record"><h2 id="record">Recorded decision</h2>
+      <table><tbody>
+        <tr><th scope="row">Outcome</th><td><span class="badge ${h(review.decision === "accept" ? "accepted" : "unknown")}">${h(review.decision)}</span></td></tr>
+        <tr><th scope="row">Decided by</th><td>${h(review.actor_name)} (${h(review.actor_role)})</td></tr>
+        <tr><th scope="row">Reason</th><td>${h(review.reason ?? "—")}</td></tr>
+        <tr><th scope="row">Decided at</th><td>${h(review.created_at)}</td></tr>
+        <tr><th scope="row">Revision covered</th><td>supplier version ${review.expected_version}</td></tr>
+      </tbody></table></section>` : ""}
       ${canDecide ? `<section aria-labelledby="decision"><h2 id="decision">Decision (version ${f.expected_version})</h2>
       <p>Accepting applies the observed values and increments the supplier to version ${f.expected_version + 1}. This cannot be undone except by a new accepted refresh.</p>
       <form method="post" action="/refreshes/${h(f.id)}/decision">
@@ -301,19 +368,23 @@ export function registerPages(r: Router, _providers: ProviderSet): void {
           <button type="submit" name="decision" value="accept">Accept new evidence</button>
           <button type="submit" name="decision" value="dismiss">Dismiss</button>
         </p>
-      </form></section>` : f.state === "review_ready" ? "<p>Awaiting an AP approver decision.</p>" : ""}
+      </form></section>` : !review && f.state === "review_ready" ? "<p role=\"status\">Awaiting an AP approver decision.</p>" : ""}
       <p><a href="/inbox">Back to inbox</a></p>`));
   });
 
   r.post("/refreshes/:id/decision", (ctx: Ctx) => {
-    requireRole(ctx.actor!, "decide");
-    const b = ctx.body as Record<string, string>;
-    decide(ctx.db, ctx.actor!, ctx.params.id, {
-      expectedVersion: Number(b.expected_version),
-      decision: b.decision as "accept" | "dismiss",
-      reason: b.reason,
-    });
-    redirect(ctx.res, `/refreshes/${ctx.params.id}`);
+    try {
+      requireRole(ctx.actor!, "decide");
+      const b = ctx.body as Record<string, string>;
+      decide(ctx.db, ctx.actor!, ctx.params.id, {
+        expectedVersion: Number(b.expected_version),
+        decision: b.decision as "accept" | "dismiss",
+        reason: b.reason,
+      });
+      redirect(ctx.res, `/refreshes/${ctx.params.id}`);
+    } catch (e) {
+      errorPage(ctx, e, `/refreshes/${ctx.params.id}`, "Back to refresh case");
+    }
   });
 
   r.get("/invoices", (ctx: Ctx) => {
@@ -350,10 +421,14 @@ export function registerPages(r: Router, _providers: ProviderSet): void {
   });
 
   r.post("/exceptions", (ctx: Ctx) => {
-    requireRole(ctx.actor!, "refer_exception");
-    const b = ctx.body as Record<string, string>;
-    const out = createException(ctx.db, ctx.actor!, { kind: b.kind, detail: b.detail });
-    redirect(ctx.res, "/exceptions");
+    try {
+      requireRole(ctx.actor!, "refer_exception");
+      const b = ctx.body as Record<string, string>;
+      createException(ctx.db, ctx.actor!, { kind: b.kind, detail: b.detail });
+      redirect(ctx.res, "/exceptions");
+    } catch (e) {
+      errorPage(ctx, e, "/exceptions", "Back to exceptions");
+    }
   });
 
   r.get("/reconciliation", (ctx: Ctx) => {

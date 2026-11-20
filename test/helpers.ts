@@ -2,9 +2,8 @@ import { openDb, type DB } from "../src/db.ts";
 import { Router, createApp } from "../src/http/server.ts";
 import { registerApi } from "../src/http/api.ts";
 import { registerPages } from "../src/http/pages.ts";
-import { seed, makeSiren, type SeedResult } from "../src/seed.ts";
+import { seed, makeSiren, seedCredential, type SeedResult } from "../src/seed.ts";
 import { createProviderSet, type ProviderSet } from "../src/providers/index.ts";
-import { createSession } from "../src/auth.ts";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 
@@ -28,9 +27,7 @@ export function makeEnv(opts: { rail?: string } = {}): TestEnv {
   registerPages(router, providers);
   const server = createApp(db, router);
   const tokens: Record<string, string> = {};
-  for (const [k, uid] of Object.entries(s.users)) tokens[k] = createSession(db, uid);
   const tokensB: Record<string, string> = {};
-  for (const [k, uid] of Object.entries(s.usersB)) tokensB[k] = createSession(db, uid);
   return {
     db,
     server,
@@ -48,7 +45,22 @@ export function makeEnv(opts: { rail?: string } = {}): TestEnv {
 export async function listen(env: TestEnv): Promise<TestEnv> {
   await new Promise<void>((res) => env.server.listen(0, res));
   env.base = `http://localhost:${(env.server.address() as AddressInfo).port}`;
+  // Authenticate every seeded actor through the real credential login.
+  for (const [k, uid] of Object.entries(env.seed.users)) env.tokens[k] = await loginAs(env, uid);
+  for (const [k, uid] of Object.entries(env.seed.usersB)) env.tokensB[k] = await loginAs(env, uid);
   return env;
+}
+
+/** Real login over HTTP — verifies the provisioned credential server-side. */
+export async function loginAs(env: TestEnv, userId: string, credential = seedCredential(userId)): Promise<string> {
+  const res = await fetch(env.base + "/v1/session/login", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ user_id: userId, credential }),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error(`login failed for ${userId}: ${res.status} ${JSON.stringify(body)}`);
+  return body.token;
 }
 
 export async function api(

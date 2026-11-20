@@ -270,4 +270,11 @@ CREATE TABLE audit_log (
 CREATE INDEX idx_audit_entity ON audit_log(tenant_id, entity, entity_id);
 `,
   },
+  {
+    version: 2,
+    sql: `
+ALTER TABLE users ADD COLUMN credential_hash TEXT;
+ALTER TABLE users ADD COLUMN credential_salt TEXT;
+`,
+  },
 ];
