@@ -36,38 +36,87 @@ export function layout(title: string, actor: Actor | null, body: string): string
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${h(title)} · Vendor Refresh</title>
 <style>
-:root { color-scheme: light; --ink:#1a1a1a; --line:#c8c8c8; --accent:#0b4da2; }
+:root {
+  color-scheme: light;
+  --paper: #FEF8F0;
+  --ink: #1F1A14;
+  --card: #FFFDF9;
+  --line: #E3D7C2;
+  --accent: #485C11;
+  --on-accent: #FFFFFF;
+  --error: #A23A1A;
+  --muted: #5B5243;
+  --warn-bg: #F6EAD0;
+  --bad-bg: #F2DCCE;
+  --ok-bg: #E6EDD5;
+  --neutral-bg: #EDE7DB;
+  --serif: "Crimson Text", Georgia, "Times New Roman", serif;
+  --sans: "DM Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --paper: #1F1A14;
+    --ink: #F3ECDF;
+    --card: #2A241D;
+    --line: #4A4034;
+    --accent: #A9BE6E;
+    --on-accent: #1F1A14;
+    --error: #E8A48C;
+    --muted: #C7BBA4;
+    --warn-bg: #4A3D22;
+    --bad-bg: #4E2A1D;
+    --ok-bg: #323D20;
+    --neutral-bg: #3A332A;
+  }
+}
 * { box-sizing: border-box; }
-body { font-family: system-ui, sans-serif; color: var(--ink); margin: 0; line-height: 1.45; }
+body { font-family: var(--sans); color: var(--ink); background: var(--paper); margin: 0; line-height: 1.45; }
+h1, h2, h3, legend { font-family: var(--serif); font-weight: 600; line-height: 1.2; }
 a { color: var(--accent); }
 a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
-  outline: 3px solid var(--accent); outline-offset: 2px;
+  outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 2px;
 }
 .skip { position: absolute; left: -9999px; }
-.skip:focus { left: 8px; top: 8px; background: #fff; padding: 8px; z-index: 10; }
-header { display: flex; gap: 16px; align-items: center; padding: 12px 20px; border-bottom: 1px solid var(--line); }
+.skip:focus { left: 8px; top: 8px; background: var(--card); padding: 8px; z-index: 10; border: 1px solid var(--line); }
+header { display: flex; gap: 16px; align-items: center; padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--card); }
+header > strong > a { font-family: var(--serif); font-size: 1.15em; color: var(--ink); text-decoration: none; }
 header nav { display: flex; gap: 12px; flex-wrap: wrap; }
-header .who { margin-left: auto; font-size: .9em; }
-main { padding: 20px; max-width: 1100px; }
+header .who { margin-left: auto; font-size: .9em; color: var(--muted); }
+header .who button { padding: 4px 10px; font-size: .9em; }
+main { padding: 20px; max-width: 1100px; overflow-x: auto; }
+main > section, main > form { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; margin: 14px 0; }
 .badge { display: inline-block; padding: 1px 8px; border: 1px solid var(--line); border-radius: 10px; font-size: .8em; }
-.badge.stale { background: #fff4d6; }
-.badge.conflict { background: #ffe0e0; }
-.badge.unknown { background: #e6e6f0; }
-.badge.ok, .badge.linked, .badge.settled, .badge.accepted, .badge.review_ready { background: #dff0d8; }
-.badge.error, .badge.blocked, .badge.failed, .badge.reconciling { background: #f2dede; }
-table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+.badge.stale { background: var(--warn-bg); }
+.badge.conflict { background: var(--bad-bg); color: var(--error); border-color: var(--error); }
+.badge.unknown { background: var(--neutral-bg); color: var(--muted); }
+.badge.ok, .badge.linked, .badge.settled, .badge.accepted, .badge.review_ready { background: var(--ok-bg); color: var(--accent); border-color: var(--accent); }
+.badge.error, .badge.blocked, .badge.failed, .badge.reconciling { background: var(--bad-bg); color: var(--error); border-color: var(--error); }
+table { border-collapse: collapse; width: 100%; margin: 12px 0; font-variant-numeric: tabular-nums; }
 th, td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
-th { background: #f4f4f4; }
-main { overflow-x: auto; }
-fieldset { border: 1px solid var(--line); margin: 12px 0; padding: 12px; }
+th { background: var(--neutral-bg); }
+code, kbd, samp { font-family: var(--mono); font-size: .92em; }
+fieldset { border: 1px solid var(--line); margin: 12px 0; padding: 12px; border-radius: 6px; }
 label { display: block; margin: 8px 0 2px; font-weight: 600; }
-input[type=text], input[type=date], select, textarea { width: 100%; max-width: 640px; padding: 6px; font: inherit; }
-button, .btn { padding: 8px 14px; font: inherit; cursor: pointer; }
-.error-text { color: #a40000; }
-.diff-changed { background: #fff4d6; }
-.diff-unknown { background: #e6e6f0; }
+input[type=text], input[type=date], input[type=password], select, textarea {
+  width: 100%; max-width: 640px; padding: 6px; font: inherit;
+  background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 4px;
+}
+input[type=text]:focus, input[type=date]:focus, input[type=password]:focus, select:focus, textarea:focus { border-color: var(--accent); }
+button { padding: 8px 14px; font: inherit; font-weight: 600; cursor: pointer; background: var(--accent); color: var(--on-accent); border: 1px solid var(--accent); border-radius: 6px; }
+button[name="decision"][value="dismiss"] { background: transparent; color: var(--accent); }
+.btn { display: inline-block; padding: 8px 14px; font: inherit; cursor: pointer; color: var(--accent); background: transparent; border: 1px solid var(--accent); border-radius: 6px; text-decoration: none; }
+.error-text { color: var(--error); }
+.diff-changed { background: var(--warn-bg); }
+.diff-unknown { background: var(--neutral-bg); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
-@media (max-width: 480px) { main { padding: 12px; } th, td { padding: 4px 6px; font-size: .9em; } table { table-layout: fixed; } }
+@media (max-width: 480px) {
+  main { padding: 12px; }
+  main > section, main > form { padding: 10px 12px; }
+  th, td { padding: 4px 6px; font-size: .9em; }
+  table { table-layout: fixed; }
+}
 </style>
 </head>
 <body>
