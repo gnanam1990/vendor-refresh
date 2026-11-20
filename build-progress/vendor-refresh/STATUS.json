@@ -1,0 +1,75 @@
+{
+  "project": "Vendor Refresh",
+  "packVersion": "1.0",
+  "testedSha": null,
+  "targetBranch": "devin/vendor-refresh",
+  "modules": [
+    {
+      "id": "M01",
+      "title": "Vendor master and invoices",
+      "state": "accepted",
+      "owner": "devin-local",
+      "commands": [
+        "npm test (6 pass: T-001,T-002,T-002b,INV-01,cross-tenant,read-only)"
+      ],
+      "evidence": [
+        "test/m01-import.test.ts"
+      ],
+      "nextAction": "Build CSV preview, explicit column mapping, SIREN validation and tenant-scoped deduplication. Save raw permitted values alongside parsed observations."
+    },
+    {
+      "id": "M02",
+      "title": "Freshness and conflict cases",
+      "state": "active",
+      "owner": null,
+      "commands": [],
+      "evidence": [],
+      "nextAction": "Implement a versioned clock-based policy and stable trigger coalescing per accepted supplier revision."
+    },
+    {
+      "id": "M03",
+      "title": "Registry adapter and terms",
+      "state": "pending",
+      "owner": null,
+      "commands": [],
+      "evidence": [],
+      "nextAction": "Define provider discovery, quoted amount, metadata, source timing and lawful field retention. Implement a real eligible source and record environment evidence."
+    },
+    {
+      "id": "M04",
+      "title": "Delegated spending and recovery",
+      "state": "pending",
+      "owner": null,
+      "commands": [],
+      "evidence": [],
+      "nextAction": "Bind the selected listing, amount, currency and grant to an intent. Use transactional reservations plus outbox, receipt matching and reconciliation."
+    },
+    {
+      "id": "M05",
+      "title": "Field differences and decisions",
+      "state": "pending",
+      "owner": null,
+      "commands": [],
+      "evidence": [],
+      "nextAction": "Produce field-level deltas with source originals, effective dates and comparison rules. Apply an accepted decision using optimistic concurrency."
+    },
+    {
+      "id": "M06",
+      "title": "AP inbox and sensitive exceptions",
+      "state": "pending",
+      "owner": null,
+      "commands": [],
+      "evidence": [],
+      "nextAction": "Build accessible case list, decision screen, exception routing and redacted evidence preview."
+    },
+    {
+      "id": "M07",
+      "title": "Close, export and pilot evidence",
+      "state": "pending",
+      "owner": null,
+      "commands": [],
+      "evidence": [],
+      "nextAction": "Build paginated accepted-change export, spend reconciliation and pilot report of paid checks, unresolved items and analyst time."
+    }
+  ]
+}
