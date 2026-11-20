@@ -67,7 +67,8 @@ export function decide(
         if (d.outcome === "changed" && d.observed_value !== null) {
           const val = JSON.parse(String(d.observed_value));
           if (d.field === "address") {
-            accepted.address = { ...(accepted.address ?? {}), line1: val };
+            // Observed registry addresses arrive as a normalized joined line.
+            accepted.address_text = val;
           } else {
             accepted[d.field as string] = val;
           }

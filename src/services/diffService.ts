@@ -9,12 +9,14 @@ export type MonitoredField = (typeof MONITORED_FIELDS)[number];
 interface AcceptedSnapshot {
   legal_name?: string | null;
   status?: string | null;
+  address_text?: string | null;
   address?: { line1?: string | null; line2?: string | null; postal_code?: string | null; city?: string | null; country?: string | null } | null;
 }
 
 function acceptedField(snapshot: AcceptedSnapshot | null, field: MonitoredField): string | null {
   if (!snapshot) return null;
   if (field === "address") {
+    if (snapshot.address_text) return snapshot.address_text;
     const a = snapshot.address;
     if (!a) return null;
     return [a.line1, a.line2, a.postal_code, a.city, a.country].filter(Boolean).join(", ") || null;

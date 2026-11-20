@@ -1,7 +1,7 @@
 {
   "project": "Vendor Refresh",
   "packVersion": "1.0",
-  "testedSha": "91c843038a74e1a0ba90ff4376888ef81205525f",
+  "testedSha": "507781694e78382c53d98e0ee673532b8f3e1b28",
   "targetBranch": "devin/vendor-refresh",
   "modules": [
     {
@@ -59,16 +59,20 @@
     {
       "id": "M05",
       "title": "Field differences and decisions",
-      "state": "active",
-      "owner": null,
-      "commands": [],
-      "evidence": [],
+      "state": "accepted",
+      "owner": "devin-local",
+      "commands": [
+        "npm test (20 pass incl. T-009,T-010)"
+      ],
+      "evidence": [
+        "test/m05-decisions.test.ts"
+      ],
       "nextAction": "Produce field-level deltas with source originals, effective dates and comparison rules. Apply an accepted decision using optimistic concurrency."
     },
     {
       "id": "M06",
       "title": "AP inbox and sensitive exceptions",
-      "state": "pending",
+      "state": "active",
       "owner": null,
       "commands": [],
       "evidence": [],

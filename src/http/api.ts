@@ -4,6 +4,7 @@ import { createSession, requireRole, assertCanWrite } from "../auth.ts";
 import { runImport, preview, allowedFields, type ImportKind } from "../services/importService.ts";
 import { scanFreshness, openCaseList } from "../services/scan.ts";
 import { createRefresh } from "../services/refreshService.ts";
+import { decide } from "../services/decisionService.ts";
 import { badRequest, notFound } from "../domain/errors.ts";
 import { newId } from "../db.ts";
 
@@ -137,6 +138,17 @@ export function registerApi(r: Router): void {
       })),
       snapshot: snapshot ? { ...snapshot, terms: JSON.parse(String(snapshot.terms)) } : null,
     });
+  });
+
+  r.post("/v1/refreshes/:id/decision", (ctx: Ctx) => {
+    requireRole(ctx.actor!, "decide");
+    const b = (ctx.body ?? {}) as Record<string, unknown>;
+    const out = decide(ctx.db, ctx.actor!, ctx.params.id, {
+      expectedVersion: Number(b.expected_version),
+      decision: String(b.decision) as "accept" | "dismiss",
+      reason: b.reason != null ? String(b.reason) : undefined,
+    });
+    sendJson(ctx.res, 200, out);
   });
 
   r.get("/v1/refreshes/:id/evidence", (ctx: Ctx) => {
