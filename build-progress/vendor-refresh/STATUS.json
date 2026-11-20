@@ -1,7 +1,7 @@
 {
   "project": "Vendor Refresh",
   "packVersion": "1.0",
-  "testedSha": "507781694e78382c53d98e0ee673532b8f3e1b28",
+  "testedSha": "1d65eff5113e2f85b2ab365bc0cdd5190be8552e",
   "targetBranch": "devin/vendor-refresh",
   "modules": [
     {
@@ -72,16 +72,20 @@
     {
       "id": "M06",
       "title": "AP inbox and sensitive exceptions",
-      "state": "active",
-      "owner": null,
-      "commands": [],
-      "evidence": [],
+      "state": "accepted",
+      "owner": "devin-local",
+      "commands": [
+        "npm test (23 pass incl. T-011,T-012)"
+      ],
+      "evidence": [
+        "test/m06-inbox.test.ts"
+      ],
       "nextAction": "Build accessible case list, decision screen, exception routing and redacted evidence preview."
     },
     {
       "id": "M07",
       "title": "Close, export and pilot evidence",
-      "state": "pending",
+      "state": "active",
       "owner": null,
       "commands": [],
       "evidence": [],

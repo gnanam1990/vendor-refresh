@@ -5,6 +5,7 @@ import { runImport, preview, allowedFields, type ImportKind } from "../services/
 import { scanFreshness, openCaseList } from "../services/scan.ts";
 import { createRefresh } from "../services/refreshService.ts";
 import { decide } from "../services/decisionService.ts";
+import { createException } from "../services/exceptionService.ts";
 import { badRequest, notFound } from "../domain/errors.ts";
 import { newId } from "../db.ts";
 
@@ -183,6 +184,25 @@ export function registerApi(r: Router): void {
       ? ctx.db.prepare("SELECT * FROM invoices WHERE tenant_id = ? AND status = ? ORDER BY created_at").all(ctx.actor!.tenantId, status)
       : ctx.db.prepare("SELECT * FROM invoices WHERE tenant_id = ? ORDER BY created_at").all(ctx.actor!.tenantId);
     sendJson(ctx.res, 200, { invoices: rows });
+  });
+
+  r.post("/v1/exceptions", (ctx: Ctx) => {
+    requireRole(ctx.actor!, "refer_exception");
+    const b = (ctx.body ?? {}) as Record<string, unknown>;
+    const out = createException(ctx.db, ctx.actor!, {
+      kind: String(b.kind ?? ""),
+      supplierId: b.supplier_id != null ? String(b.supplier_id) : undefined,
+      invoiceId: b.invoice_id != null ? String(b.invoice_id) : undefined,
+      detail: String(b.detail ?? ""),
+    });
+    sendJson(ctx.res, 201, out);
+  });
+
+  r.get("/v1/exceptions", (ctx: Ctx) => {
+    const rows = ctx.db
+      .prepare("SELECT * FROM exceptions WHERE tenant_id = ? ORDER BY created_at DESC")
+      .all(ctx.actor!.tenantId);
+    sendJson(ctx.res, 200, { exceptions: rows });
   });
 
   r.get("/v1/imports/:id", (ctx: Ctx) => {

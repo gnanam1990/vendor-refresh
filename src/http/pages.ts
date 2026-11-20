@@ -3,6 +3,12 @@ import { sendHtml, redirect, sendJson } from "./server.ts";
 import { escapeHtml as h } from "../domain/redact.ts";
 import { allowedFields, preview, runImport } from "../services/importService.ts";
 import { createSession, requireRole, type Actor } from "../auth.ts";
+import { openCaseList, scanFreshness } from "../services/scan.ts";
+import { createRefresh } from "../services/refreshService.ts";
+import { decide } from "../services/decisionService.ts";
+import { createException } from "../services/exceptionService.ts";
+import { activePolicy } from "../services/policy.ts";
+import { notFound } from "../domain/errors.ts";
 import type { ProviderSet } from "../providers/index.ts";
 
 export function layout(title: string, actor: Actor | null, body: string): string {
@@ -179,5 +185,173 @@ export function registerPages(r: Router, _providers: ProviderSet): void {
         <td>${row.supplierId ? `<a href="/suppliers/${h(row.supplierId)}">supplier</a>` : ""}</td>
       </tr>`).join("")}</tbody></table>
       <p><a href="/inbox">Back to inbox</a></p>`));
+  });
+
+  r.get("/inbox", (ctx: Ctx) => {
+    const kind = ctx.query.get("kind") ?? "";
+    const cases = openCaseList(ctx.db, ctx.actor!.tenantId, kind || undefined);
+    const filterLink = (k: string, label: string) =>
+      `<a class="btn" href="/inbox${k ? `?kind=${k}` : ""}"${kind === k ? ' aria-current="true"' : ""}>${label}</a>`;
+    sendHtml(ctx.res, 200, layout("Inbox", ctx.actor, `
+      <h1>Work inbox</h1>
+      <p>${filterLink("", "All")} ${filterLink("stale", "Stale")} ${filterLink("conflict", "Conflict")} ${filterLink("unknown", "Unknown")}</p>
+      ${cases.length === 0 ? "<p>No open cases.</p>" : ""}
+      <table><caption class="skip">Cases requiring attention</caption>
+      <thead><tr><th scope="col">Kind</th><th scope="col">Supplier</th><th scope="col">SIREN</th><th scope="col">Reason</th><th scope="col">Action</th></tr></thead>
+      <tbody>${cases.map((c: any) => `<tr>
+        <td><span class="badge ${h(c.kind)}">${h(c.kind)}</span></td>
+        <td><a href="/suppliers/${h(c.supplier_id)}">${h(c.legal_name ?? "(unnamed)")}</a></td>
+        <td>${h(c.siren)}</td>
+        <td>${h(c.reason ?? `${c.field}: ${c.accepted_value ?? "—"} → ${c.observed_value ?? "unknown"}`)}</td>
+        <td>${c.refresh_id ? `<a class="btn" href="/refreshes/${h(c.refresh_id)}">Review</a>` : `<a class="btn" href="/suppliers/${h(c.supplier_id)}#refresh">Open</a>`}</td>
+      </tr>`).join("")}</tbody></table>
+      <form method="post" action="/scan"><button type="submit">Run freshness scan</button></form>`));
+  });
+
+  r.post("/scan", (ctx: Ctx) => {
+    requireRole(ctx.actor!, "request_refresh");
+    scanFreshness(ctx.db, ctx.actor!.tenantId, ctx.actor);
+    redirect(ctx.res, "/inbox");
+  });
+
+  r.get("/suppliers/:id", (ctx: Ctx) => {
+    const s = ctx.db.prepare("SELECT * FROM suppliers WHERE id = ? AND tenant_id = ?").get(ctx.params.id, ctx.actor!.tenantId) as any;
+    if (!s) throw notFound("supplier not found");
+    const snap = s.accepted_snapshot ? JSON.parse(s.accepted_snapshot) : {};
+    const refreshes = ctx.db.prepare("SELECT id, state, reason, created_at FROM refreshes WHERE supplier_id = ? AND tenant_id = ? ORDER BY created_at DESC LIMIT 10").all(s.id, ctx.actor!.tenantId) as any[];
+    const triggers = ctx.db.prepare("SELECT id, kind, reason, state FROM triggers WHERE supplier_id = ? AND tenant_id = ? AND state = 'open'").all(s.id, ctx.actor!.tenantId) as any[];
+    const canRequest = ctx.actor!.role === "ap_analyst" && s.vendor_state !== "archived";
+    const address = snap.address_text ?? [snap.address?.line1, snap.address?.line2, snap.address?.postal_code, snap.address?.city, snap.address?.country].filter(Boolean).join(", ");
+    sendHtml(ctx.res, 200, layout("Supplier", ctx.actor, `
+      <h1>${h(snap.legal_name ?? "(unnamed)")}</h1>
+      <p>SIREN <code>${h(s.siren)}</code> · state <span class="badge ${h(s.vendor_state)}">${h(s.vendor_state)}</span> · accepted version ${s.version} · accepted at ${h(s.accepted_at ?? "—")}</p>
+      <section aria-labelledby="accepted"><h2 id="accepted">Accepted evidence</h2>
+      <table><tbody>
+        <tr><th scope="row">Legal name</th><td>${h(snap.legal_name ?? "—")}</td></tr>
+        <tr><th scope="row">Status</th><td>${h(snap.status ?? "—")}</td></tr>
+        <tr><th scope="row">Registered address</th><td>${h(address || "—")}</td></tr>
+        <tr><th scope="row">Source</th><td>${h(snap.source ?? "—")} · captured ${h(snap.captured_at ?? "—")}</td></tr>
+      </tbody></table></section>
+      ${triggers.length ? `<section aria-labelledby="trig"><h2 id="trig">Open cases</h2><ul>${triggers.map((t: any) => `<li><span class="badge ${h(t.kind)}">${h(t.kind)}</span> ${h(t.reason)}</li>`).join("")}</ul></section>` : ""}
+      ${canRequest ? `<section aria-labelledby="refresh"><h2 id="refresh">Request refresh</h2>
+      <form method="post" action="/suppliers/${h(s.id)}/refreshes">
+        <p>Current version <strong>${s.version}</strong>; the refresh must name this version to proceed.</p>
+        <input type="hidden" name="expected_version" value="${s.version}">
+        <input type="hidden" name="key" value="web-${Date.now()}-${Math.random().toString(36).slice(2, 10)}">
+        ${triggers[0] ? `<input type="hidden" name="trigger_id" value="${h(triggers[0].id)}">` : ""}
+        <label for="reason">Reason</label>
+        <input type="text" id="reason" name="reason" required value="${triggers[0] ? h(triggers[0].reason) : ""}">
+        <p><button type="submit">Request paid refresh</button></p>
+      </form></section>` : ""}
+      <section aria-labelledby="recent"><h2 id="recent">Recent refreshes</h2>
+      <ul>${refreshes.map((f: any) => `<li><a href="/refreshes/${h(f.id)}"><code>${h(f.id)}</code></a> — <span class="badge ${h(f.state)}">${h(f.state)}</span> ${h(f.reason)}</li>`).join("") || "<li>none</li>"}</ul></section>`));
+  });
+
+  r.post("/suppliers/:id/refreshes", (ctx: Ctx) => {
+    requireRole(ctx.actor!, "request_refresh");
+    const b = ctx.body as Record<string, string>;
+    const out = createRefresh(ctx.db, ctx.actor!, ctx.params.id, {
+      reason: b.reason ?? "",
+      expectedVersion: Number(b.expected_version),
+      key: b.key,
+      triggerId: b.trigger_id || undefined,
+    });
+    redirect(ctx.res, `/refreshes/${out.refresh.id}`);
+  });
+
+  r.get("/refreshes/:id", (ctx: Ctx) => {
+    const f = ctx.db.prepare("SELECT * FROM refreshes WHERE id = ? AND tenant_id = ?").get(ctx.params.id, ctx.actor!.tenantId) as any;
+    if (!f) throw notFound("refresh not found");
+    const s = ctx.db.prepare("SELECT * FROM suppliers WHERE id = ?").get(f.supplier_id) as any;
+    const snap = s.accepted_snapshot ? JSON.parse(s.accepted_snapshot) : {};
+    const diffs = ctx.db.prepare("SELECT * FROM diffs WHERE refresh_id = ? ORDER BY field").all(f.id) as any[];
+    const intents = ctx.db.prepare("SELECT * FROM spend_intents WHERE refresh_id = ?").all(f.id) as any[];
+    const quote = f.quote_id ? ctx.db.prepare("SELECT * FROM quotes WHERE id = ?").get(f.quote_id) as any : null;
+    const policy = activePolicy(ctx.db, ctx.actor!.tenantId);
+    const canDecide = ctx.actor!.role === "ap_approver" && f.state === "review_ready";
+    sendHtml(ctx.res, 200, layout(`Refresh ${f.id}`, ctx.actor, `
+      <h1>Refresh case</h1>
+      <p><a href="/suppliers/${h(s.id)}">${h(snap.legal_name ?? s.siren)}</a> · state <span class="badge ${h(f.state)}">${h(f.state)}</span>
+      ${f.block_reason ? ` · <span class="error-text">${h(f.block_reason)}</span>` : ""}</p>
+      <section aria-labelledby="cost"><h2 id="cost">Purchase state</h2>
+      <table><tbody>
+        <tr><th scope="row">Quoted max</th><td>${quote ? `${quote.amount_minor} ${quote.currency} (listing ${h(quote.listing_id)})` : "not quoted yet"}</td></tr>
+        <tr><th scope="row">Policy caps</th><td>${policy.perCallMaxMinor} ${policy.currency} per call · ${policy.cumulativeCapMinor} ${policy.currency} total (policy v${policy.version})</td></tr>
+        ${intents.map((i: any) => `<tr><th scope="row">Spend intent</th><td>${i.amount_minor} ${i.currency} — <span class="badge ${h(i.status)}">${h(i.status)}</span>${i.remote_ref ? ` · ref <code>${h(i.remote_ref)}</code>` : " · pending merchant ref"}${i.status === "reconciling" ? " · <strong>uncertain charge — manual reconciliation required</strong>" : ""}</td></tr>`).join("")}
+      </tbody></table></section>
+      <section aria-labelledby="diffs"><h2 id="diffs">Field differences</h2>
+      ${diffs.length === 0 ? "<p>No diffs yet — evidence not fetched.</p>" : `
+      <table><thead><tr><th scope="col">Field</th><th scope="col">Accepted</th><th scope="col">Observed</th><th scope="col">Outcome</th><th scope="col">Source timing</th></tr></thead>
+      <tbody>${diffs.map((d: any) => {
+        const av = d.accepted_value ? JSON.parse(d.accepted_value) : null;
+        const ov = d.observed_value ? JSON.parse(d.observed_value) : null;
+        return `<tr class="diff-${h(d.outcome)}">
+          <td>${h(d.field)}</td><td>${h(av ?? "—")}</td><td>${h(ov ?? (d.outcome === "unknown" ? "not present at source" : "—"))}</td>
+          <td><span class="badge ${h(d.outcome === "changed" ? "conflict" : d.outcome)}">${h(d.outcome)}</span></td>
+          <td>effective ${h(d.source_effective_at ?? "—")} · retrieved ${h(d.retrieved_at ?? "—")} · ${h(d.source)} · rule ${h(d.rule_version)}</td></tr>`;
+      }).join("")}</tbody></table>`}</section>
+      ${canDecide ? `<section aria-labelledby="decision"><h2 id="decision">Decision (version ${f.expected_version})</h2>
+      <p>Accepting applies the observed values and increments the supplier to version ${f.expected_version + 1}. This cannot be undone except by a new accepted refresh.</p>
+      <form method="post" action="/refreshes/${h(f.id)}/decision">
+        <input type="hidden" name="expected_version" value="${f.expected_version}">
+        <label for="dreason">Reason (required)</label>
+        <input type="text" id="dreason" name="reason" required>
+        <p>
+          <button type="submit" name="decision" value="accept">Accept new evidence</button>
+          <button type="submit" name="decision" value="dismiss">Dismiss</button>
+        </p>
+      </form></section>` : f.state === "review_ready" ? "<p>Awaiting an AP approver decision.</p>" : ""}
+      <p><a href="/inbox">Back to inbox</a></p>`));
+  });
+
+  r.post("/refreshes/:id/decision", (ctx: Ctx) => {
+    requireRole(ctx.actor!, "decide");
+    const b = ctx.body as Record<string, string>;
+    decide(ctx.db, ctx.actor!, ctx.params.id, {
+      expectedVersion: Number(b.expected_version),
+      decision: b.decision as "accept" | "dismiss",
+      reason: b.reason,
+    });
+    redirect(ctx.res, `/refreshes/${ctx.params.id}`);
+  });
+
+  r.get("/invoices", (ctx: Ctx) => {
+    const rows = ctx.db.prepare(
+      `SELECT i.*, json_extract(s.accepted_snapshot,'$.legal_name') AS legal_name
+       FROM invoices i LEFT JOIN suppliers s ON s.id = i.supplier_id
+       WHERE i.tenant_id = ? ORDER BY i.created_at DESC`
+    ).all(ctx.actor!.tenantId) as any[];
+    sendHtml(ctx.res, 200, layout("Invoices", ctx.actor, `
+      <h1>Invoices</h1>
+      <table><thead><tr><th scope="col">Reference</th><th scope="col">Issued</th><th scope="col">SIREN</th><th scope="col">Status</th><th scope="col">Supplier</th><th scope="col">Reason</th></tr></thead>
+      <tbody>${rows.map((i: any) => `<tr>
+        <td>${h(i.external_ref)}</td><td>${h(i.issued_at)}</td><td>${h(i.siren ?? "—")}</td>
+        <td><span class="badge ${h(i.status)}">${h(i.status)}</span></td>
+        <td>${i.supplier_id ? `<a href="/suppliers/${h(i.supplier_id)}">${h(i.legal_name ?? i.supplier_id)}</a>` : "—"}</td>
+        <td>${h(i.error_code ?? "")}</td></tr>`).join("")}</tbody></table>`));
+  });
+
+  r.get("/exceptions", (ctx: Ctx) => {
+    const rows = ctx.db.prepare("SELECT * FROM exceptions WHERE tenant_id = ? ORDER BY created_at DESC").all(ctx.actor!.tenantId) as any[];
+    const canCreate = ["ap_analyst", "ap_approver", "finance_admin"].includes(ctx.actor!.role);
+    sendHtml(ctx.res, 200, layout("Exceptions", ctx.actor, `
+      <h1>Sensitive exceptions</h1>
+      <p>Bank and beneficiary changes are always referred to an independent manual flow; public company evidence never authorizes them.</p>
+      ${canCreate ? `<form method="post" action="/exceptions">
+        <label for="kind">Kind</label>
+        <select id="kind" name="kind"><option value="bank_change">Bank account change</option><option value="beneficiary_change">Beneficiary change</option><option value="other">Other</option></select>
+        <label for="detail">Detail (do not paste account numbers — they are masked)</label>
+        <input type="text" id="detail" name="detail" required>
+        <p><button type="submit">Create referral</button></p>
+      </form>` : ""}
+      <table><thead><tr><th scope="col">Kind</th><th scope="col">State</th><th scope="col">Detail</th><th scope="col">Created</th></tr></thead>
+      <tbody>${rows.map((e: any) => `<tr><td>${h(e.kind)}</td><td><span class="badge ${h(e.state)}">${h(e.state)}</span></td><td>${h(e.detail)}</td><td>${h(e.created_at)}</td></tr>`).join("")}</tbody></table>`));
+  });
+
+  r.post("/exceptions", (ctx: Ctx) => {
+    requireRole(ctx.actor!, "refer_exception");
+    const b = ctx.body as Record<string, string>;
+    const out = createException(ctx.db, ctx.actor!, { kind: b.kind, detail: b.detail });
+    redirect(ctx.res, "/exceptions");
   });
 }
