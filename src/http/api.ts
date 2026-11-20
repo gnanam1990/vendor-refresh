@@ -2,6 +2,7 @@ import type { Router, Ctx } from "./server.ts";
 import { sendJson } from "./server.ts";
 import { createSession, requireRole, assertCanWrite } from "../auth.ts";
 import { runImport, preview, allowedFields, type ImportKind } from "../services/importService.ts";
+import { scanFreshness, openCaseList } from "../services/scan.ts";
 import { badRequest, notFound } from "../domain/errors.ts";
 import { newId } from "../db.ts";
 
@@ -77,6 +78,28 @@ export function registerApi(r: Router): void {
       supplier: { ...s, accepted_snapshot: s.accepted_snapshot ? JSON.parse(String(s.accepted_snapshot)) : null },
       invoices,
     });
+  });
+
+  r.post("/v1/scans", (ctx: Ctx) => {
+    requireRole(ctx.actor!, "request_refresh");
+    const at = (ctx.body as Record<string, unknown>)?.at as string | undefined;
+    sendJson(ctx.res, 200, scanFreshness(ctx.db, ctx.actor!.tenantId, ctx.actor, at));
+  });
+
+  r.get("/v1/triggers", (ctx: Ctx) => {
+    const rows = ctx.db
+      .prepare(
+        `SELECT t.*, s.siren, json_extract(s.accepted_snapshot,'$.legal_name') AS legal_name
+         FROM triggers t JOIN suppliers s ON s.id = t.supplier_id
+         WHERE t.tenant_id = ? ORDER BY t.created_at DESC`
+      )
+      .all(ctx.actor!.tenantId);
+    sendJson(ctx.res, 200, { triggers: rows });
+  });
+
+  r.get("/v1/inbox", (ctx: Ctx) => {
+    const kind = ctx.query.get("kind") ?? undefined;
+    sendJson(ctx.res, 200, { cases: openCaseList(ctx.db, ctx.actor!.tenantId, kind) });
   });
 
   r.get("/v1/invoices", (ctx: Ctx) => {

@@ -1,7 +1,7 @@
 {
   "project": "Vendor Refresh",
   "packVersion": "1.0",
-  "testedSha": null,
+  "testedSha": "56cd415fc859591375530e39e420f5b925a41419",
   "targetBranch": "devin/vendor-refresh",
   "modules": [
     {
@@ -20,16 +20,20 @@
     {
       "id": "M02",
       "title": "Freshness and conflict cases",
-      "state": "active",
-      "owner": null,
-      "commands": [],
-      "evidence": [],
+      "state": "accepted",
+      "owner": "devin-local",
+      "commands": [
+        "npm test (9 pass incl. T-003,T-004)"
+      ],
+      "evidence": [
+        "test/m02-freshness.test.ts"
+      ],
       "nextAction": "Implement a versioned clock-based policy and stable trigger coalescing per accepted supplier revision."
     },
     {
       "id": "M03",
       "title": "Registry adapter and terms",
-      "state": "pending",
+      "state": "active",
       "owner": null,
       "commands": [],
       "evidence": [],
