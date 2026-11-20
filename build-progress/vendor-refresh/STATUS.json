@@ -110,12 +110,18 @@
     "T011": "PASS",
     "T012": "PASS",
     "T013": "PASS",
-    "T014": "PASS"
+    "T014": "PASS",
+    "T015a": "PASS",
+    "T015b": "PASS",
+    "T015c": "PASS",
+    "T015d": "PASS",
+    "T015e": "PASS"
   },
   "environmentProof": {
-    "unitAndIntegration": "npm test — 26/26 pass on Node v22.23.1, clean checkout .clean-checkout at 8cdb5a8aae5292e1b509a4511336160578946dfa",
-    "endToEnd": "node scripts/acceptance.mjs — all 7 reference steps pass incl. mid-flow restart",
-    "ui": "manual smoke: /login /inbox /imports/new /exceptions /reconciliation all HTTP 200"
+    "unitAndIntegration": "npm test — 31/31 pass on Node v22.23.1 incl. authz regression (T-015a..e); clean checkout verified at 8cdb5a8 (26/26 pre-auth)",
+    "endToEnd": "node scripts/acceptance.mjs — all 7 reference steps pass incl. mid-flow restart, actors authenticated via credential login",
+    "ui": "DOM-free HTML contract replay of the full journey: 28/28 checks (selectors, labels, error pages, version bump, permission surfaces)",
+    "browser": "scripts/browser-check.mjs runnable CDP check — launch BLOCKED in agent sandbox (Mach bootstrap denied); replay on host per build-progress/vendor-refresh/BROWSER.md; evidence at build-progress/vendor-refresh/evidence/browser/evidence.json"
   },
   "externalDependencies": [
     {

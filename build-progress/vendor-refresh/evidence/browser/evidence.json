@@ -1,0 +1,7 @@
+{
+  "generated_at": "2026-11-20T06:56:29.692Z",
+  "browser": "/Users/kratos/Library/Caches/ms-playwright/chromium_headless_shell-1254/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+  "steps": [],
+  "assertions": 0,
+  "launch_error": "chrome did not expose DevToolsActivePort"
+}
