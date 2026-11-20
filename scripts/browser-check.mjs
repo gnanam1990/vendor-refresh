@@ -26,9 +26,10 @@ import { mkdtempSync, writeFileSync, readFileSync, readdirSync, mkdirSync, rmSyn
 import { createServer } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 
-const REPO = new URL("..", import.meta.url).pathname;
+const REPO = fileURLToPath(new URL("..", import.meta.url)); // decodes %20 etc. for paths with spaces
 const EVIDENCE = join(REPO, "build-progress", "vendor-refresh", "evidence", "browser");
 const KEEP = process.env.VR_KEEP === "1";
 
@@ -125,14 +126,20 @@ class CDP {
     await new Promise((res, rej) => { ws.onopen = res; ws.onerror = rej; });
     ws.onmessage = (e) => {
       const m = JSON.parse(e.data);
-      if (m.id && c.pending.has(m.id)) { c.pending.get(m.id)(m); c.pending.delete(m.id); }
+      // Responses resolve with the unwrapped `result`; protocol errors reject.
+      if (!m.id) return; // event — ignored
+      const p = c.pending.get(m.id);
+      if (!p) return;
+      c.pending.delete(m.id);
+      if (m.error) p.rej(new Error(`CDP ${m.error.code}: ${m.error.message}`));
+      else p.res(m.result);
     };
     return c;
   }
   send(method, params = {}, sessionId) {
     const id = ++this.id;
     this.ws.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }));
-    return new Promise((res) => this.pending.set(id, res));
+    return new Promise((res, rej) => this.pending.set(id, { res, rej }));
   }
 }
 
@@ -173,22 +180,26 @@ const page = {
   send: (m, p = {}) => b.send(m, p, sessionId),
   async eval(expr) {
     const r = await this.send("Runtime.evaluate", { expression: expr, returnByValue: true, awaitPromise: true });
-    if (r.result?.exceptionDetails) fail("page eval error: " + JSON.stringify(r.result.exceptionDetails).slice(0, 300));
-    return r.result?.result?.value;
+    if (r?.exceptionDetails) fail("page eval error: " + JSON.stringify(r.exceptionDetails).slice(0, 300));
+    return r?.result?.value;
   },
+  // Readiness polls must tolerate transient errors — during a navigation the
+  // old execution context is destroyed and Runtime.evaluate can protocol-error
+  // for a moment. evalSafe swallows that; assertive checks use eval.
+  async evalSafe(expr) { try { return await this.eval(expr); } catch { return undefined; } },
   async goto(url, { until = null, tries = 80 } = {}) {
     await this.send("Page.navigate", { url });
     for (let i = 0; i < tries; i++) {
-      const ready = await this.eval("document.readyState");
-      if (ready === "complete" && (!until || (await this.eval(until)))) return;
+      const ready = await this.evalSafe("document.readyState");
+      if (ready === "complete" && (!until || (await this.evalSafe(until)))) return;
       await new Promise((r) => setTimeout(r, 150));
     }
     fail(`navigation to ${url} did not settle (${until ?? "load"})`);
   },
-  async reload(until) { await this.send("Page.reload", {}); if (until) { for (let i = 0; i < 60; i++) { if (await this.eval(until)) return; await new Promise((r) => setTimeout(r, 150)); } fail("reload did not settle"); } },
+  async reload(until) { await this.send("Page.reload", {}); if (until) { for (let i = 0; i < 60; i++) { if (await this.evalSafe(until)) return; await new Promise((r) => setTimeout(r, 150)); } fail("reload did not settle"); } },
   async shot(file) {
-    const { result } = await this.send("Page.captureScreenshot", { format: "png" });
-    writeFileSync(join(EVIDENCE, file), Buffer.from(result.data, "base64"));
+    const r = await this.send("Page.captureScreenshot", { format: "png" });
+    writeFileSync(join(EVIDENCE, file), Buffer.from(r.data, "base64"));
     return file;
   },
   async key(type, opts = {}) {
@@ -205,7 +216,10 @@ const page = {
     await this.key("keyUp", { key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
   },
   async type(text) { await this.send("Input.insertText", { text }); },
-  active() { return this.eval("JSON.stringify({tag:document.activeElement.tagName,id:document.activeElement.id,type:document.activeElement.type||'',text:(document.activeElement.innerText||document.activeElement.value||'').slice(0,60)})").then(JSON.parse); },
+  async active() {
+    const s = await this.evalSafe("JSON.stringify({tag:document.activeElement.tagName,id:document.activeElement.id,type:document.activeElement.type||'',text:(document.activeElement.innerText||document.activeElement.value||'').slice(0,60)})");
+    return s ? JSON.parse(s) : { tag: "", id: "", type: "", text: "" };
+  },
 };
 
 try {
@@ -217,7 +231,8 @@ try {
 
   const waitPath = async (re, tries = 40) => {
     for (let i = 0; i < tries; i++) {
-      if (re.test(await page.eval(`location.pathname`))) return;
+      const p = await page.evalSafe(`location.pathname`);
+      if (typeof p === "string" && re.test(p)) return;
       await new Promise((r) => setTimeout(r, 150));
     }
     fail(`path did not match ${re}`);

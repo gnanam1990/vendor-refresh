@@ -72,6 +72,21 @@ Permission denied`) and socket binds, for both `chrome-headless-shell`
 `--headless=new`). The check therefore exits with `launch_error` here;
 **replay on the host** with the command above — no changes needed.
 
+### Fixed host defect (a0af6d1 → follow-up)
+
+On a fresh-clone host run the script hung at the first `goto` ("did not
+settle (#cred)") with CDP error `-32601 'Runtime.evaluate' was not found`.
+Root cause: `CDP.send` resolved the **full protocol envelope**, so
+`Target.createTarget` / `Target.attachToTarget` destructured `targetId` /
+`sessionId` from the wrong level — every subsequent command ran
+session-less on the browser target, where the Runtime domain doesn't
+exist. Protocol errors were also silently resolved. Fix: responses now
+resolve the unwrapped `result`, protocol errors reject, navigation polls
+use a tolerant `evalSafe` (execution contexts are destroyed mid-nav),
+`REPO` uses `fileURLToPath` (paths with spaces), and the client layer is
+covered by a stub-socket verification of unwrap / reject / event
+filtering / eval-result paths.
+
 The same journey was validated DOM-free over HTTP against the real routes
 and rendered HTML: 28/28 contract checks pass (selectors, labels, error
 pages, version increment, permission surfaces) — so the script's assertions
